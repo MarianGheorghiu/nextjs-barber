@@ -5,30 +5,27 @@ import MainContainer from "@/components/MainContainer";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
 
-export default function Register() {
-  // Store user input using English variable names
+export default function RegisterBarber() {
   const [lastName, setLastName] = useState("");
   const [firstName, setFirstName] = useState("");
   const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
+  const [courseDiploma, setCourseDiploma] = useState("");
+  const [emailPrefix, setEmailPrefix] = useState(""); // Only the name part
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  // Stări pentru vizualizarea parolelor
+  // Stări pentru vizualizarea parolelor adăugate
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // Store form state
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Handle form submission
-  const handleSignUp = async (e: React.FormEvent) => {
+  const handleBarberSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    // 1. Check if passwords match
     if (password !== confirmPassword) {
       setError("Parolele nu coincid! Te rugăm să verifici.");
       return;
@@ -36,18 +33,21 @@ export default function Register() {
 
     setLoading(true);
 
-    // 2. Initialize Supabase
     const supabase = createClient();
 
-    // 3. Send data to Supabase Auth
+    // Combine prefix with the mandatory domain
+    const fullEmail = `${emailPrefix.trim().toLowerCase()}@mcorp.com`;
+
     const { data, error: supabaseError } = await supabase.auth.signUp({
-      email: email,
+      email: fullEmail,
       password: password,
       options: {
         data: {
           first_name: firstName,
           last_name: lastName,
           phone: phone,
+          diploma: courseDiploma, // Sending diploma details to DB
+          role: "barber", // We mark them as barber here
         },
       },
     });
@@ -63,30 +63,26 @@ export default function Register() {
 
   return (
     <MainContainer>
-      <div className="flex-1 flex flex-col justify-center items-center min-h-[90vh] py-12 px-4">
-        {/* Liquid Glass Container */}
-        <div className="relative w-full max-w-xl bg-white/[0.04] backdrop-blur-2xl border border-white/10 p-8 sm:p-10 rounded-[2.5rem] shadow-[0_15px_40px_rgba(0,0,0,0.4)] overflow-hidden">
-          {/* Glow subtil */}
-          <div className="absolute -top-24 -right-24 w-52 h-52 bg-cyan-500/20 blur-[80px] rounded-full pointer-events-none"></div>
-
-          <div className="relative z-10 text-center mb-8">
+      <div className="flex-1 flex flex-col justify-center items-center min-h-[90vh] py-12">
+        <div className="w-full max-w-xl bg-white/5 backdrop-blur-xl border border-white/10 p-8 sm:p-10 rounded-[2.5rem] shadow-[0_8px_32px_0_rgba(0,0,0,0.3)] border-t-cyan-500/30">
+          <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-white mb-2">
-              Creează un cont nou
+              Înregistrare Frizer
             </h1>
-            <p className="text-slate-400 font-light text-sm">Sau nu.</p>
+            <p className="text-slate-300 font-light">
+              Completează datele pentru acces în sistem.
+            </p>
           </div>
 
-          {/* Error Message */}
           {error && (
-            <div className="relative z-10 mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/50 text-red-200 text-sm text-center">
+            <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/50 text-red-200 text-sm text-center">
               {error}
             </div>
           )}
 
-          {/* Success State */}
           {success ? (
-            <div className="relative z-10 text-center py-8">
-              <div className="w-16 h-16 bg-green-500/20 text-green-400 rounded-full flex items-center justify-center mx-auto mb-4 border border-green-500/50 shadow-[0_0_20px_rgba(34,197,94,0.3)]">
+            <div className="text-center py-8">
+              <div className="w-16 h-16 bg-green-500/20 text-green-400 rounded-full flex items-center justify-center mx-auto mb-4 border border-green-500/50">
                 <svg
                   className="w-8 h-8"
                   fill="none"
@@ -102,24 +98,20 @@ export default function Register() {
                 </svg>
               </div>
               <h3 className="text-2xl font-bold text-white mb-2">
-                Cont creat cu succes!
+                Cont Creat!
               </h3>
               <p className="text-slate-300 mb-6">
-                Te rugăm să îți verifici emailul pentru a confirma contul.
+                Contul tău de frizer a fost înregistrat cu succes.
               </p>
               <Link
                 href="/login"
-                className="px-8 py-3 rounded-xl bg-cyan-500 text-[#000428] font-bold inline-block hover:bg-cyan-400 transition-colors shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_30px_rgba(34,211,238,0.4)] cursor-pointer"
+                className="px-8 py-3 rounded-xl bg-cyan-500 text-[#000428] font-bold inline-block hover:bg-cyan-400 transition-colors cursor-pointer"
               >
                 Mergi la Logare
               </Link>
             </div>
           ) : (
-            // Registration Form
-            <form
-              onSubmit={handleSignUp}
-              className="relative z-10 flex flex-col gap-5"
-            >
+            <form onSubmit={handleBarberSignUp} className="flex flex-col gap-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-2 ml-1">
@@ -143,10 +135,24 @@ export default function Register() {
                     required
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
-                    placeholder="Andrei"
+                    placeholder="Ion"
                     className="w-full bg-white/5 border border-white/10 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 rounded-2xl px-5 py-3.5 text-white placeholder:text-slate-500 outline-none transition-all"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-2 ml-1">
+                  Date Diplomă / Curs Absolvit
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={courseDiploma}
+                  onChange={(e) => setCourseDiploma(e.target.value)}
+                  placeholder="Ex: Curs Frizerie Academia X, Seria 123"
+                  className="w-full bg-white/5 border border-white/10 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 rounded-2xl px-5 py-3.5 text-white placeholder:text-slate-500 outline-none transition-all"
+                />
               </div>
 
               <div>
@@ -163,22 +169,30 @@ export default function Register() {
                 />
               </div>
 
+              {/* Email special format */}
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2 ml-1">
-                  Email
+                  Email Intern (@mcorp.com)
                 </label>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="nume@exemplu.ro"
-                  className="w-full bg-white/5 border border-white/10 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 rounded-2xl px-5 py-3.5 text-white placeholder:text-slate-500 outline-none transition-all"
-                />
+                <div className="flex relative items-center">
+                  <input
+                    type="text"
+                    required
+                    value={emailPrefix}
+                    onChange={(e) =>
+                      setEmailPrefix(e.target.value.replace(/\s+/g, ""))
+                    } // No spaces allowed
+                    placeholder="nume.prenume"
+                    className="w-full bg-white/5 border border-white/10 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 rounded-2xl pl-5 pr-32 py-3.5 text-white placeholder:text-slate-500 outline-none transition-all"
+                  />
+                  <span className="absolute right-5 text-cyan-400 font-medium pointer-events-none">
+                    @mcorp.com
+                  </span>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                {/* Parola */}
+                {/* Modificat pentru show/hide parola */}
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-2 ml-1">
                     Parolă
@@ -239,7 +253,7 @@ export default function Register() {
                   </div>
                 </div>
 
-                {/* Confirmă Parola */}
+                {/* Modificat pentru show/hide confirmare parola */}
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-2 ml-1">
                     Confirmă Parola
@@ -305,35 +319,26 @@ export default function Register() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full mt-4 bg-cyan-500 hover:bg-cyan-400 text-[#000428] font-bold text-lg py-4 rounded-2xl transition-all shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_30px_rgba(34,211,238,0.4)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                className="w-full mt-4 bg-cyan-500 hover:bg-cyan-400 text-[#000428] font-bold text-lg py-4 rounded-2xl transition-all shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_30px_rgba(34,211,238,0.4)] disabled:opacity-50 cursor-pointer"
               >
-                {loading ? "Se creează contul..." : "Creează Contul"}
+                {loading ? "Se creează contul..." : "Înregistrează Frizer"}
               </button>
             </form>
           )}
-
-          {!success && (
-            <div className="relative z-10 mt-8 pt-6 border-t border-white/10 flex flex-col gap-4">
-              <p className="text-center text-slate-400 text-sm">
-                Ai deja un cont?{" "}
-                <Link
-                  href="/login"
-                  className="text-cyan-400 font-semibold hover:text-cyan-300 hover:underline transition-colors ml-1 cursor-pointer"
-                >
-                  Loghează-te aici
-                </Link>
-              </p>
-
-              <div className="flex justify-center mt-2">
-                <Link
-                  href="/register-barber"
-                  className="w-full text-center px-6 py-3.5 rounded-2xl border border-white/20 bg-white/5 text-slate-300 font-medium hover:bg-white/10 hover:text-white hover:border-cyan-400/50 transition-all duration-300 cursor-pointer"
-                >
-                  Înregistrare ca frizer
-                </Link>
-              </div>
-            </div>
-          )}
+          <div className="mt-8 pt-6 border-t border-white/10 flex gap-4 justify-center w-full">
+            <Link
+              href="/login"
+              className="flex-1 text-center px-4 py-3.5 rounded-2xl border border-white/20 bg-white/5 text-slate-300 font-medium hover:bg-white/10 hover:text-white hover:border-cyan-400/50 transition-all duration-300 cursor-pointer"
+            >
+              Logare
+            </Link>
+            <Link
+              href="/register"
+              className="flex-1 text-center px-4 py-3.5 rounded-2xl border border-white/20 bg-white/5 text-slate-300 font-medium hover:bg-white/10 hover:text-white hover:border-cyan-400/50 transition-all duration-300 cursor-pointer"
+            >
+              Înregistrare client
+            </Link>
+          </div>
         </div>
       </div>
     </MainContainer>
