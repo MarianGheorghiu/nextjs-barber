@@ -117,3 +117,38 @@ export async function cleanupPastAppointmentsAction(barberId: string) {
 
   return { success: true, count };
 }
+
+// Confirmă toate programările dintr-un interval de date (o zi sau o săptămână)
+export async function confirmAppointmentsByDateRangeAction(
+  barberId: string,
+  startDate: string,
+  endDate: string,
+) {
+  const { error } = await supabaseAdmin
+    .from("appointments")
+    .update({ status: "confirmed" })
+    .eq("barber_id", barberId)
+    .gte("appointment_date", startDate)
+    .lte("appointment_date", endDate)
+    .neq("status", "confirmed"); // Le confirmăm doar pe cele care nu sunt deja confirmate
+
+  if (error) return { success: false, error: error.message };
+  return { success: true };
+}
+
+// Șterge TOATE programările dintr-un interval (Anulare + Ștergere din DB)
+export async function deleteAppointmentsByDateRangeAction(
+  barberId: string,
+  startDate: string,
+  endDate: string,
+) {
+  const { error } = await supabaseAdmin
+    .from("appointments")
+    .delete()
+    .eq("barber_id", barberId)
+    .gte("appointment_date", startDate)
+    .lte("appointment_date", endDate);
+
+  if (error) return { success: false, error: error.message };
+  return { success: true };
+}
