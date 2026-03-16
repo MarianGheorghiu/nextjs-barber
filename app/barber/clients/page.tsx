@@ -4,16 +4,15 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
 import {
-  getUniqueClientsAction,
-  blockClientAction,
-  unblockClientAction,
+  toggleClientStatusAction,
+  deleteClientAction,
 } from "@/app/actions/barberClientsActions";
 
 type BarberClient = {
-  id: string; // Acum id-ul este de fapt numărul de telefon
+  id: string;
   name: string;
   phone: string;
-  status: "active" | "blocked";
+  status: string;
 };
 
 export default function BarberClientsPage() {
@@ -40,42 +39,58 @@ export default function BarberClientsPage() {
     }
     setBarberId(user.id);
 
-    // Chemăm backend-ul inteligent care scotocește prin appointments
-    const uniqueClients = await getUniqueClientsAction(user.id);
-    setClients(uniqueClients);
+    // Citim din tabelul permanent de agendă!
+    const { data, error } = await supabase
+      .from("barber_clients")
+      .select("*")
+      .eq("barber_id", user.id)
+      .order("name", { ascending: true });
+
+    if (data && !error) setClients(data);
     setLoading(false);
   };
 
-  const handleToggleStatus = async (phone: string, currentStatus: string) => {
-    if (!barberId) return;
-
-    if (currentStatus === "active") {
-      const result = await blockClientAction(barberId, phone);
-      if (result.success) {
-        setClients(
-          clients.map((c) =>
-            c.phone === phone ? { ...c, status: "blocked" } : c,
-          ),
-        );
-      }
+  const handleToggleStatus = async (id: string, currentStatus: string) => {
+    const result = await toggleClientStatusAction(id, currentStatus);
+    if (result.success) {
+      setClients(
+        clients.map((c) =>
+          c.id === id
+            ? {
+                ...c,
+                status: currentStatus === "active" ? "blocked" : "active",
+              }
+            : c,
+        ),
+      );
     } else {
-      const result = await unblockClientAction(barberId, phone);
+      alert("Eroare la modificare status: " + result.error);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (
+      window.confirm(
+        "Ștergi definitiv acest client din agendă? (Nu îi va afecta programările curente)",
+      )
+    ) {
+      const result = await deleteClientAction(id);
       if (result.success) {
-        setClients(
-          clients.map((c) =>
-            c.phone === phone ? { ...c, status: "active" } : c,
-          ),
-        );
+        setClients(clients.filter((c) => c.id !== id));
+      } else {
+        alert("Eroare la ștergere: " + result.error);
       }
     }
   };
 
+  // Logica de Căutare (Filtrare instantanee)
   const filteredClients = clients.filter(
     (c) =>
       c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.phone.includes(searchQuery),
+      (c.phone && c.phone.includes(searchQuery)),
   );
 
+  // Calcule pentru Panouri
   const totalClients = clients.length;
   const activeClients = clients.filter((c) => c.status === "active").length;
   const blockedClients = clients.filter((c) => c.status === "blocked").length;
@@ -85,7 +100,7 @@ export default function BarberClientsPage() {
       <div className="flex flex-col items-center justify-center h-[80vh]">
         <div className="w-12 h-12 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin mb-4"></div>
         <p className="text-cyan-400 font-medium animate-pulse">
-          Analizăm istoricul programărilor...
+          Se încarcă agenda permanentă...
         </p>
       </div>
     );
@@ -98,7 +113,8 @@ export default function BarberClientsPage() {
         <div>
           <h1 className="text-3xl font-bold text-white mb-2">Clienții Mei</h1>
           <p className="text-slate-400">
-            Aceasta este agenda ta generată automat din programările confirmate.
+            Agenda ta permanentă. Clienții apar aici automat când le confirmi o
+            programare.
           </p>
         </div>
       </div>
@@ -107,7 +123,7 @@ export default function BarberClientsPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         <div className="bg-white/5 border border-white/10 p-5 rounded-2xl relative overflow-hidden">
           <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">
-            Total Clienți Unici
+            Total Clienți În Agendă
           </p>
           <p className="text-3xl font-bold text-white">{totalClients}</p>
         </div>
@@ -164,11 +180,11 @@ export default function BarberClientsPage() {
         {clients.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-slate-400 font-medium text-lg mb-2">
-              Agenda ta este goală.
+              Agenda este goală.
             </p>
             <p className="text-sm text-slate-500">
-              Clienții vor apărea aici automat după ce le confirmi prima
-              programare.
+              Du-te în Calendar și apasă "Confirmă" pe o programare, iar
+              clientul va fi salvat automat aici!
             </p>
           </div>
         ) : filteredClients.length === 0 ? (
@@ -183,9 +199,7 @@ export default function BarberClientsPage() {
                   <th className="pb-4 font-medium pl-2">Nume Client</th>
                   <th className="pb-4 font-medium">Telefon</th>
                   <th className="pb-4 font-medium text-center">Status</th>
-                  <th className="pb-4 font-medium text-right pr-2">
-                    Acces Programări
-                  </th>
+                  <th className="pb-4 font-medium text-right pr-2">Acțiuni</th>
                 </tr>
               </thead>
               <tbody className="text-slate-300">
@@ -194,9 +208,10 @@ export default function BarberClientsPage() {
 
                   return (
                     <tr
-                      key={client.phone}
+                      key={client.id}
                       className={`border-b border-white/5 transition-colors group ${!isActive ? "opacity-60 hover:opacity-100" : "hover:bg-white/5"}`}
                     >
+                      {/* Nume */}
                       <td className="py-4 pl-2 align-middle">
                         <p
                           className={`font-bold text-base ${isActive ? "text-white" : "text-slate-400 line-through decoration-red-500/50 decoration-2"}`}
@@ -205,10 +220,12 @@ export default function BarberClientsPage() {
                         </p>
                       </td>
 
+                      {/* Telefon */}
                       <td className="py-4 align-middle font-mono text-cyan-400 text-sm">
-                        {client.phone}
+                        {client.phone || "Lipsă"}
                       </td>
 
+                      {/* Status */}
                       <td className="py-4 text-center align-middle">
                         {isActive ? (
                           <span className="px-3 py-1 rounded-md bg-green-500/10 text-green-400 border border-green-500/20 text-xs font-bold">
@@ -221,19 +238,61 @@ export default function BarberClientsPage() {
                         )}
                       </td>
 
+                      {/* Acțiuni */}
                       <td className="py-4 text-right pr-2 align-middle">
-                        <button
-                          onClick={() =>
-                            handleToggleStatus(client.phone, client.status)
-                          }
-                          className={`cursor-pointer px-4 py-2 rounded-lg border transition-all text-xs font-bold inline-flex items-center gap-2 ${
-                            isActive
-                              ? "bg-red-500/10 hover:bg-red-500/20 text-red-400 border-red-500/30"
-                              : "bg-green-500/10 hover:bg-green-500/20 text-green-400 border-green-500/30"
-                          }`}
-                        >
-                          {isActive ? <>🚫 Interzice</> : <>✅ Permite</>}
-                        </button>
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() =>
+                              handleToggleStatus(client.id, client.status)
+                            }
+                            className={`cursor-pointer px-3 py-1.5 rounded-lg border transition-all text-xs font-bold flex items-center gap-1.5 ${
+                              isActive
+                                ? "bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border-orange-500/30"
+                                : "bg-green-500/10 hover:bg-green-500/20 text-green-400 border-green-500/30"
+                            }`}
+                            title={
+                              isActive
+                                ? "Blochează Clientul"
+                                : "Deblochează Clientul"
+                            }
+                          >
+                            {isActive ? (
+                              <>
+                                🚫{" "}
+                                <span className="hidden sm:inline">
+                                  Blochează
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                ✅{" "}
+                                <span className="hidden sm:inline">
+                                  Deblochează
+                                </span>
+                              </>
+                            )}
+                          </button>
+
+                          <button
+                            onClick={() => handleDelete(client.id)}
+                            className="cursor-pointer px-3 py-1.5 rounded-lg bg-white/5 hover:bg-red-500/10 text-slate-400 hover:text-red-400 border border-transparent hover:border-red-500/30 transition-all text-xs font-bold flex items-center gap-1"
+                            title="Șterge din agendă"
+                          >
+                            <svg
+                              className="w-4 h-4"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth="2"
+                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                              />
+                            </svg>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

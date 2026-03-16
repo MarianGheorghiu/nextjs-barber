@@ -27,12 +27,13 @@ export async function rescheduleAppointmentAction(
   newDate: string,
   newTime: string,
 ) {
+  // NOU: Trece în "rescheduled" ca să ceară acordul clientului. NU îl băgăm încă în agendă!
   const { error } = await supabaseAdmin
     .from("appointments")
     .update({
       appointment_date: newDate,
       appointment_time: newTime,
-      status: "confirmed", // Dacă o reprogramează frizerul, o și confirmăm automat
+      status: "rescheduled",
     })
     .eq("id", appointmentId);
 

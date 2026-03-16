@@ -66,3 +66,61 @@ export async function saveScheduleAction(barberId: string, scheduleData: any) {
 
   return { success: true };
 }
+
+// Adaugă o zi liberă (Concediu) și șterge automat programările din acea zi
+export async function addCustomDayOffAction(barberId: string, dateStr: string) {
+  // 1. Ștergem toate programările din acea zi
+  await supabaseAdmin
+    .from("appointments")
+    .delete()
+    .eq("barber_id", barberId)
+    .eq("appointment_date", dateStr);
+
+  // 2. Extragem setările curente
+  const { data: settings } = await supabaseAdmin
+    .from("barber_settings")
+    .select("custom_days_off")
+    .eq("barber_id", barberId)
+    .single();
+
+  let daysOff = settings?.custom_days_off || [];
+
+  // 3. Adăugăm ziua nouă (dacă nu e deja acolo)
+  if (!daysOff.includes(dateStr)) {
+    daysOff.push(dateStr);
+    const { error } = await supabaseAdmin
+      .from("barber_settings")
+      .update({ custom_days_off: daysOff })
+      .eq("barber_id", barberId);
+
+    if (error) return { success: false, error: error.message };
+  }
+
+  return { success: true };
+}
+
+// Elimină o zi din lista de concediu (Deblochează ziua)
+export async function removeCustomDayOffAction(
+  barberId: string,
+  dateStr: string,
+) {
+  const { data: settings } = await supabaseAdmin
+    .from("barber_settings")
+    .select("custom_days_off")
+    .eq("barber_id", barberId)
+    .single();
+
+  if (!settings) return { success: false, error: "Nu s-au găsit setările." };
+
+  const daysOff = (settings.custom_days_off || []).filter(
+    (d: string) => d !== dateStr,
+  );
+
+  const { error } = await supabaseAdmin
+    .from("barber_settings")
+    .update({ custom_days_off: daysOff })
+    .eq("barber_id", barberId);
+
+  if (error) return { success: false, error: error.message };
+  return { success: true };
+}

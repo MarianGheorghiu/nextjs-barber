@@ -7,62 +7,70 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
-// Tragem toți clienții unici (grupându-i după telefon) și vedem dacă sunt blocați
-export async function getUniqueClientsAction(barberId: string) {
-  // 1. Tragem toate programările CONFIRMATE (ca să avem numele și telefoanele)
-  const { data: apps } = await supabaseAdmin
-    .from("appointments")
-    .select("client_name, client_phone")
+// Sincronizare: Adaugă clientul în Agendă dacă nu există deja
+export async function syncClientToAgendaAction(
+  barberId: string,
+  clientName: string,
+  clientPhone: string,
+) {
+  if (!clientPhone || clientPhone.trim() === "")
+    return { success: true, status: "ignored" };
+
+  // Verificăm dacă există deja în agendă după numărul de telefon
+  const { data: existingClient } = await supabaseAdmin
+    .from("barber_clients")
+    .select("id, status")
     .eq("barber_id", barberId)
-    .eq("status", "confirmed")
-    .order("created_at", { ascending: false }); // Cei mai recenți primii
+    .eq("phone", clientPhone)
+    .maybeSingle();
 
-  // 2. Tragem lista de numere blocate
-  const { data: blockedList } = await supabaseAdmin
-    .from("blocked_clients")
-    .select("phone")
-    .eq("barber_id", barberId);
-
-  const blockedPhones = new Set(blockedList?.map((b) => b.phone) || []);
-
-  // 3. Grupăm ca să scoatem dublurile (ex: Ion a fost de 5 ori, îi luăm ultimul nume)
-  const uniqueClientsMap = new Map();
-
-  if (apps) {
-    apps.forEach((app) => {
-      // Ignorăm programările fără telefon
-      if (!app.client_phone) return;
-
-      if (!uniqueClientsMap.has(app.client_phone)) {
-        uniqueClientsMap.set(app.client_phone, {
-          id: app.client_phone, // Folosim numărul ca ID unic
-          name: app.client_name,
-          phone: app.client_phone,
-          status: blockedPhones.has(app.client_phone) ? "blocked" : "active",
-        });
-      }
-    });
+  if (existingClient) {
+    if (existingClient.status === "blocked") {
+      return {
+        success: false,
+        isBlocked: true,
+        error: "Acest client este pe lista ta de blocați!",
+      };
+    }
+    return { success: true, status: "exists" };
   }
 
-  return Array.from(uniqueClientsMap.values());
+  // Nu există, deci îl salvăm permanent în agendă
+  const { error } = await supabaseAdmin.from("barber_clients").insert([
+    {
+      barber_id: barberId,
+      name: clientName,
+      phone: clientPhone,
+      status: "active",
+    },
+  ]);
+
+  if (error) return { success: false, error: error.message };
+  return { success: true, status: "added" };
 }
 
-// Blochează un client (Adaugă numărul în blacklist)
-export async function blockClientAction(barberId: string, phone: string) {
+// Schimbă statusul (Blochează / Deblochează)
+export async function toggleClientStatusAction(
+  clientId: string,
+  currentStatus: string,
+) {
+  const newStatus = currentStatus === "active" ? "blocked" : "active";
   const { error } = await supabaseAdmin
-    .from("blocked_clients")
-    .insert([{ barber_id: barberId, phone }]);
+    .from("barber_clients")
+    .update({ status: newStatus })
+    .eq("id", clientId);
+
   if (error) return { success: false, error: error.message };
   return { success: true };
 }
 
-// Deblochează (Șterge numărul din blacklist)
-export async function unblockClientAction(barberId: string, phone: string) {
+// Șterge definitiv din agendă
+export async function deleteClientAction(clientId: string) {
   const { error } = await supabaseAdmin
-    .from("blocked_clients")
+    .from("barber_clients")
     .delete()
-    .eq("barber_id", barberId)
-    .eq("phone", phone);
+    .eq("id", clientId);
+
   if (error) return { success: false, error: error.message };
   return { success: true };
 }
