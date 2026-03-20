@@ -6,7 +6,6 @@ import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
 
 export default function Register() {
-  // Store user input using English variable names
   const [lastName, setLastName] = useState("");
   const [firstName, setFirstName] = useState("");
   const [phone, setPhone] = useState("");
@@ -14,40 +13,62 @@ export default function Register() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  // Stări pentru vizualizarea parolelor
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // Store form state
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Handle form submission
+  // Funcție de validare a datelor clientului
+  const validateForm = () => {
+    // Validare Telefon (10 cifre, începe cu 07)
+    const phoneRegex = /^07\d{8}$/;
+    if (!phoneRegex.test(phone.replace(/\s/g, ""))) {
+      return "Numărul de telefon este invalid. Trebuie să aibă 10 cifre și să înceapă cu 07.";
+    }
+
+    // Validare Email Standard
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return "Te rugăm să introduci o adresă de email validă.";
+    }
+
+    // Validare Parolă
+    if (password.length < 6) {
+      return "Parola trebuie să aibă cel puțin 6 caractere.";
+    }
+    if (password !== confirmPassword) {
+      return "Parolele nu coincid! Te rugăm să verifici.";
+    }
+
+    return null; // Nicio eroare
+  };
+
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    // 1. Check if passwords match
-    if (password !== confirmPassword) {
-      setError("Parolele nu coincid! Te rugăm să verifici.");
+    const validationError = validateForm();
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
     setLoading(true);
-
-    // 2. Initialize Supabase
     const supabase = createClient();
 
-    // 3. Send data to Supabase Auth
-    const { data, error: supabaseError } = await supabase.auth.signUp({
-      email: email,
+    const cleanPhone = phone.replace(/\s/g, "");
+
+    const { error: supabaseError } = await supabase.auth.signUp({
+      email: email.trim().toLowerCase(),
       password: password,
       options: {
         data: {
-          first_name: firstName,
-          last_name: lastName,
-          phone: phone,
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
+          phone: cleanPhone,
+          role: "client", // Salvăm explicit ca fiind client
         },
       },
     });
@@ -63,32 +84,44 @@ export default function Register() {
 
   return (
     <MainContainer>
-      <div className="flex-1 flex flex-col justify-center items-center min-h-[90vh] py-12 px-4">
-        {/* Liquid Glass Container */}
-        <div className="relative w-full max-w-xl bg-white/[0.04] backdrop-blur-2xl border border-white/10 p-8 sm:p-10 rounded-[2.5rem] shadow-[0_15px_40px_rgba(0,0,0,0.4)] overflow-hidden">
-          {/* Glow subtil */}
-          <div className="absolute -top-24 -right-24 w-52 h-52 bg-cyan-500/20 blur-[80px] rounded-full pointer-events-none"></div>
+      <div className="flex-1 flex flex-col justify-center items-center min-h-[90vh] py-12 px-4 relative z-10">
+        {/* Glow de fundal impresionant */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl h-[80%] bg-cyan-500/10 blur-[120px] -z-10 rounded-full pointer-events-none"></div>
 
-          <div className="relative z-10 text-center mb-8">
-            <h1 className="text-3xl font-bold text-white mb-2">
-              Creează un cont nou
+        <div className="w-full max-w-2xl bg-white/5 backdrop-blur-2xl border border-white/20 p-8 sm:p-12 rounded-[3rem] shadow-[0_20px_50px_rgba(0,0,0,0.5)] relative overflow-hidden">
+          <div className="text-center mb-10">
+            <h1 className="text-3xl sm:text-4xl font-black text-white mb-3 tracking-tight">
+              Înregistrare Client
             </h1>
-            <p className="text-slate-400 font-light text-sm">Sau nu.</p>
+            <p className="text-slate-300 font-medium">
+              Creează un cont pentru a te programa rapid.
+            </p>
           </div>
 
-          {/* Error Message */}
           {error && (
-            <div className="relative z-10 mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/50 text-red-200 text-sm text-center">
+            <div className="mb-8 p-4 rounded-2xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm text-center animate-fade-in flex items-center justify-center gap-2 font-bold shadow-lg">
+              <svg
+                className="w-5 h-5 shrink-0"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="3"
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
+              </svg>
               {error}
             </div>
           )}
 
-          {/* Success State */}
           {success ? (
-            <div className="relative z-10 text-center py-8">
-              <div className="w-16 h-16 bg-green-500/20 text-green-400 rounded-full flex items-center justify-center mx-auto mb-4 border border-green-500/50 shadow-[0_0_20px_rgba(34,197,94,0.3)]">
+            <div className="text-center py-10 animate-fade-in">
+              <div className="w-20 h-20 bg-green-500/20 text-green-400 rounded-full flex items-center justify-center mx-auto mb-6 border-2 border-green-500/50 shadow-[0_0_30px_rgba(34,197,94,0.4)]">
                 <svg
-                  className="w-8 h-8"
+                  className="w-10 h-10"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -96,115 +129,202 @@ export default function Register() {
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    strokeWidth="2"
+                    strokeWidth="3"
                     d="M5 13l4 4L19 7"
                   />
                 </svg>
               </div>
-              <h3 className="text-2xl font-bold text-white mb-2">
-                Cont creat cu succes!
+              <h3 className="text-3xl font-black text-white mb-3">
+                Cont Creat!
               </h3>
-              <p className="text-slate-300 mb-6">
-                Te rugăm să îți verifici emailul pentru a confirma contul.
+              <p className="text-slate-300 mb-10 text-lg">
+                Contul tău de client a fost înregistrat cu succes. Confirmă-ți
+                adresa de email (dacă e necesar) și loghează-te.
               </p>
               <Link
                 href="/login"
-                className="px-8 py-3 rounded-xl bg-cyan-500 text-[#000428] font-bold inline-block hover:bg-cyan-400 transition-colors shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_30px_rgba(34,211,238,0.4)] cursor-pointer"
+                className="px-10 py-4 rounded-2xl bg-cyan-500 text-[#000428] font-black text-lg hover:bg-cyan-400 transition-all shadow-[0_0_20px_rgba(34,211,238,0.4)] inline-block hover:scale-105"
               >
-                Mergi la Logare
+                Mergi la Logare →
               </Link>
             </div>
           ) : (
-            // Registration Form
             <form
               onSubmit={handleSignUp}
-              className="relative z-10 flex flex-col gap-5"
+              className="flex flex-col gap-6 animate-fade-in"
             >
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2 ml-1">
-                    Nume
+              {/* RÂND 1: Nume / Prenume */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className="relative group">
+                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-widest mb-2 ml-1">
+                    Nume Familie
                   </label>
-                  <input
-                    type="text"
-                    required
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    placeholder="Popescu"
-                    className="w-full bg-white/5 border border-white/10 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 rounded-2xl px-5 py-3.5 text-white placeholder:text-slate-500 outline-none transition-all"
-                  />
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-cyan-400 transition-colors">
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                        />
+                      </svg>
+                    </div>
+                    <input
+                      type="text"
+                      required
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      placeholder="Ex: Popescu"
+                      className="w-full bg-white/10 focus:bg-white/15 backdrop-blur-md border border-white/20 focus:border-cyan-400 rounded-2xl pl-11 pr-4 py-4 text-white placeholder:text-slate-400 outline-none transition-all shadow-inner focus:shadow-[0_0_20px_rgba(34,211,238,0.15)] font-medium text-base"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2 ml-1">
+                <div className="relative group">
+                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-widest mb-2 ml-1">
                     Prenume
                   </label>
-                  <input
-                    type="text"
-                    required
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    placeholder="Andrei"
-                    className="w-full bg-white/5 border border-white/10 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 rounded-2xl px-5 py-3.5 text-white placeholder:text-slate-500 outline-none transition-all"
-                  />
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-cyan-400 transition-colors">
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
+                        />
+                      </svg>
+                    </div>
+                    <input
+                      type="text"
+                      required
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      placeholder="Ex: Andrei"
+                      className="w-full bg-white/10 focus:bg-white/15 backdrop-blur-md border border-white/20 focus:border-cyan-400 rounded-2xl pl-11 pr-4 py-4 text-white placeholder:text-slate-400 outline-none transition-all shadow-inner focus:shadow-[0_0_20px_rgba(34,211,238,0.15)] font-medium text-base"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2 ml-1">
-                  Telefon
-                </label>
-                <input
-                  type="tel"
-                  required
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="07XX XXX XXX"
-                  className="w-full bg-white/5 border border-white/10 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 rounded-2xl px-5 py-3.5 text-white placeholder:text-slate-500 outline-none transition-all"
-                />
+              {/* RÂND 2: Telefon / Email */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className="relative group">
+                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-widest mb-2 ml-1">
+                    Telefon
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-cyan-400 transition-colors">
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                        />
+                      </svg>
+                    </div>
+                    <input
+                      type="tel"
+                      required
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="07XX XXX XXX"
+                      className="w-full bg-white/10 focus:bg-white/15 backdrop-blur-md border border-white/20 focus:border-cyan-400 rounded-2xl pl-11 pr-4 py-4 text-white placeholder:text-slate-400 outline-none transition-all shadow-inner focus:shadow-[0_0_20px_rgba(34,211,238,0.15)] font-mono font-bold tracking-wide text-base"
+                    />
+                  </div>
+                </div>
+
+                <div className="relative group">
+                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-widest mb-2 ml-1">
+                    Email
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-cyan-400 transition-colors">
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207"
+                        />
+                      </svg>
+                    </div>
+                    <input
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) =>
+                        setEmail(e.target.value.trim().toLowerCase())
+                      }
+                      placeholder="nume@exemplu.ro"
+                      className="w-full bg-white/10 focus:bg-white/15 backdrop-blur-md border border-white/20 focus:border-cyan-400 rounded-2xl pl-11 pr-4 py-4 text-white placeholder:text-slate-400 outline-none transition-all shadow-inner focus:shadow-[0_0_20px_rgba(34,211,238,0.15)] font-medium text-base"
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2 ml-1">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="nume@exemplu.ro"
-                  className="w-full bg-white/5 border border-white/10 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 rounded-2xl px-5 py-3.5 text-white placeholder:text-slate-500 outline-none transition-all"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                {/* Parola */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2 ml-1">
+              {/* RÂND 3: Parole */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className="relative group">
+                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-widest mb-2 ml-1">
                     Parolă
                   </label>
                   <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-cyan-400 transition-colors">
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                        />
+                      </svg>
+                    </div>
                     <input
                       type={showPassword ? "text" : "password"}
                       required
-                      minLength={6}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="w-full bg-white/5 border border-white/10 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 rounded-2xl pl-5 pr-12 py-3.5 text-white placeholder:text-slate-500 outline-none transition-all"
+                      placeholder="Minim 6 caractere"
+                      className="w-full bg-white/10 focus:bg-white/15 backdrop-blur-md border border-white/20 focus:border-cyan-400 rounded-2xl pl-11 pr-12 py-4 text-white placeholder:text-slate-400 outline-none transition-all shadow-inner focus:shadow-[0_0_20px_rgba(34,211,238,0.15)] font-medium text-base"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute inset-y-0 right-4 flex items-center text-slate-400 hover:text-cyan-400 transition-colors focus:outline-none cursor-pointer"
+                      className="absolute inset-y-0 right-4 flex items-center text-slate-400 hover:text-cyan-400 transition-colors cursor-pointer"
                     >
                       {showPassword ? (
                         <svg
-                          className="w-5 h-5 cursor-pointer"
+                          className="w-5 h-5"
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
-                          xmlns="http://www.w3.org/2000/svg"
                         >
                           <path
                             strokeLinecap="round"
@@ -221,11 +341,10 @@ export default function Register() {
                         </svg>
                       ) : (
                         <svg
-                          className="w-5 h-5 cursor-pointer"
+                          className="w-5 h-5"
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
-                          xmlns="http://www.w3.org/2000/svg"
                         >
                           <path
                             strokeLinecap="round"
@@ -239,34 +358,47 @@ export default function Register() {
                   </div>
                 </div>
 
-                {/* Confirmă Parola */}
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2 ml-1">
-                    Confirmă Parola
+                <div className="relative group">
+                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-widest mb-2 ml-1">
+                    Confirmare
                   </label>
                   <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-cyan-400 transition-colors">
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                        />
+                      </svg>
+                    </div>
                     <input
                       type={showConfirmPassword ? "text" : "password"}
                       required
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="w-full bg-white/5 border border-white/10 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 rounded-2xl pl-5 pr-12 py-3.5 text-white placeholder:text-slate-500 outline-none transition-all"
+                      placeholder="Repetă parola"
+                      className="w-full bg-white/10 focus:bg-white/15 backdrop-blur-md border border-white/20 focus:border-cyan-400 rounded-2xl pl-11 pr-12 py-4 text-white placeholder:text-slate-400 outline-none transition-all shadow-inner focus:shadow-[0_0_20px_rgba(34,211,238,0.15)] font-medium text-base"
                     />
                     <button
                       type="button"
                       onClick={() =>
                         setShowConfirmPassword(!showConfirmPassword)
                       }
-                      className="absolute inset-y-0 right-4 flex items-center text-slate-400 hover:text-cyan-400 transition-colors focus:outline-none cursor-pointer"
+                      className="absolute inset-y-0 right-4 flex items-center text-slate-400 hover:text-cyan-400 transition-colors cursor-pointer"
                     >
                       {showConfirmPassword ? (
                         <svg
-                          className="w-5 h-5 cursor-pointer"
+                          className="w-5 h-5"
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
-                          xmlns="http://www.w3.org/2000/svg"
                         >
                           <path
                             strokeLinecap="round"
@@ -283,11 +415,10 @@ export default function Register() {
                         </svg>
                       ) : (
                         <svg
-                          className="w-5 h-5 cursor-pointer"
+                          className="w-5 h-5"
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
-                          xmlns="http://www.w3.org/2000/svg"
                         >
                           <path
                             strokeLinecap="round"
@@ -305,33 +436,32 @@ export default function Register() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full mt-4 bg-cyan-500 hover:bg-cyan-400 text-[#000428] font-bold text-lg py-4 rounded-2xl transition-all shadow-[0_0_20px_rgba(34,211,238,0.2)] hover:shadow-[0_0_30px_rgba(34,211,238,0.4)] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                className="w-full mt-6 bg-cyan-500 hover:bg-cyan-400 text-[#000428] font-black text-lg py-4 rounded-2xl transition-all shadow-[0_0_20px_rgba(34,211,238,0.3)] hover:shadow-[0_0_30px_rgba(34,211,238,0.4)] disabled:opacity-50 cursor-pointer flex justify-center items-center gap-2 hover:scale-[1.02]"
               >
-                {loading ? "Se creează contul..." : "Creează Contul"}
+                {loading ? (
+                  <span className="w-6 h-6 border-4 border-[#000428] border-t-transparent rounded-full animate-spin"></span>
+                ) : (
+                  "Creează Cont Client"
+                )}
               </button>
             </form>
           )}
 
+          {/* BUTOANE DE JOS COMPACTE, DAR PREMIUM */}
           {!success && (
-            <div className="relative z-10 mt-8 pt-6 border-t border-white/10 flex flex-col gap-4">
-              <p className="text-center text-slate-400 text-sm">
-                Ai deja un cont?{" "}
-                <Link
-                  href="/login"
-                  className="text-cyan-400 font-semibold hover:text-cyan-300 hover:underline transition-colors ml-1 cursor-pointer"
-                >
-                  Loghează-te aici
-                </Link>
-              </p>
-
-              <div className="flex justify-center mt-2">
-                <Link
-                  href="/register-barber"
-                  className="w-full text-center px-6 py-3.5 rounded-2xl border border-white/20 bg-white/5 text-slate-300 font-medium hover:bg-white/10 hover:text-white hover:border-cyan-400/50 transition-all duration-300 cursor-pointer"
-                >
-                  Înregistrare ca frizer
-                </Link>
-              </div>
+            <div className="mt-8 pt-6 border-t border-white/10 flex flex-col sm:flex-row gap-4 justify-center w-full">
+              <Link
+                href="/login"
+                className="flex-1 text-center py-3.5 rounded-2xl bg-white/5 border border-white/10 text-white font-bold text-sm hover:bg-white/10 hover:border-white/30 transition-all cursor-pointer shadow-sm"
+              >
+                Logare
+              </Link>
+              <Link
+                href="/register-barber"
+                className="flex-1 text-center py-3.5 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 font-bold text-sm hover:bg-cyan-500/20 hover:border-cyan-400/50 transition-all cursor-pointer shadow-sm"
+              >
+                Sunt Frizer
+              </Link>
             </div>
           )}
         </div>
