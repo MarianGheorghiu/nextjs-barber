@@ -38,3 +38,41 @@ export async function deleteBarberAction(barberId: string) {
   if (error) return { success: false, error: error.message };
   return { success: true };
 }
+
+// Adaugă asta la finalul fișierului app/actions/adminBarberActions.ts
+
+export async function addBarberFromAdminAction(data: {
+  firstName: string;
+  lastName: string;
+  shopName: string;
+  phone: string;
+  diploma: string;
+  emailPrefix: string;
+  password: string;
+}) {
+  const supabaseAdmin = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!, // Trebuie să ai această cheie în .env.local
+  );
+
+  const fullEmail = `${data.emailPrefix.trim().toLowerCase()}@mcorp.com`;
+  const cleanPhone = data.phone.replace(/\s/g, "");
+
+  // Folosim admin.createUser pentru a NU deloga adminul curent
+  const { data: userData, error } = await supabaseAdmin.auth.admin.createUser({
+    email: fullEmail,
+    password: data.password,
+    email_confirm: true, // Îl confirmăm automat
+    user_metadata: {
+      first_name: data.firstName.trim(),
+      last_name: data.lastName.trim(),
+      barbershop_name: data.shopName.trim(),
+      phone: cleanPhone,
+      diploma: data.diploma.trim(),
+      role: "barber",
+    },
+  });
+
+  if (error) return { success: false, error: error.message };
+  return { success: true, user: userData.user };
+}

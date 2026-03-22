@@ -12,8 +12,7 @@ type BarberFinancial = {
   email: string;
   shop_name: string;
   status: string;
-  // Pe viitor, aceste date vor veni dintr-un calcul (JOIN) pe tabelul de programări
-  current_month_revenue?: number;
+  current_month_revenue?: number; // Adăugăm proprietatea aici pentru a o afișa
 };
 
 export default function FinanceDashboard() {
@@ -21,11 +20,11 @@ export default function FinanceDashboard() {
   const [loading, setLoading] = useState(true);
   const [barbers, setBarbers] = useState<BarberFinancial[]>([]);
   const [totalClientsCount, setTotalClientsCount] = useState(0);
+  const [globalMonthlyRevenue, setGlobalMonthlyRevenue] = useState(0);
 
   useEffect(() => {
     const fetchFinanceData = async () => {
       const supabase = createClient();
-
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -34,25 +33,61 @@ export default function FinanceDashboard() {
         return;
       }
 
-      // 1. Tragem lista de frizeri pentru tabel
-      const { data: barbersData, error: barbersError } = await supabase
+      // 1. Tragem lista de frizeri
+      const { data: barbersData } = await supabase
         .from("profiles")
         .select("id, first_name, last_name, email, shop_name, status")
         .eq("role", "barber")
         .order("created_at", { ascending: false });
 
-      if (barbersData && !barbersError) {
-        setBarbers(barbersData);
-      }
-
-      // 2. Tragem numărul total de clienți pentru panoul de sus
-      const { count: clientsCount, error: clientsError } = await supabase
+      // 2. Tragem numărul total de clienți
+      const { count: clientsCount } = await supabase
         .from("profiles")
         .select("*", { count: "exact", head: true })
         .eq("role", "client");
 
-      if (!clientsError && clientsCount !== null) {
-        setTotalClientsCount(clientsCount);
+      if (clientsCount !== null) setTotalClientsCount(clientsCount);
+
+      // 3. Tragem TOATE programările de LUNA ASTA pentru a calcula încasările
+      const now = new Date();
+      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+        .toISOString()
+        .split("T")[0];
+
+      const { data: appointments } = await supabase
+        .from("appointments")
+        .select("barber_id, price, appointment_date, appointment_time, status")
+        .gte("appointment_date", firstDayOfMonth);
+
+      // 4. CALCUL FINANCIAR REAL
+      let totalPlatformRevenue = 0;
+      const revenuePerBarber: Record<string, number> = {};
+
+      if (appointments) {
+        appointments.forEach((app) => {
+          // Creăm data și ora exactă a programării
+          const appDateTime = new Date(
+            `${app.appointment_date}T${app.appointment_time}`,
+          );
+
+          // Condiția supremă: Să nu fie anulată și să fi trecut de ora respectivă
+          if (app.status !== "cancelled" && appDateTime < now) {
+            totalPlatformRevenue += app.price;
+            revenuePerBarber[app.barber_id] =
+              (revenuePerBarber[app.barber_id] || 0) + app.price;
+          }
+        });
+      }
+
+      setGlobalMonthlyRevenue(totalPlatformRevenue);
+
+      // Mapăm încasările către frizerii noștri
+      if (barbersData) {
+        const enrichedBarbers = barbersData.map((barber) => ({
+          ...barber,
+          current_month_revenue: revenuePerBarber[barber.id] || 0,
+        }));
+        setBarbers(enrichedBarbers);
       }
 
       setLoading(false);
@@ -61,16 +96,14 @@ export default function FinanceDashboard() {
     fetchFinanceData();
   }, [router]);
 
-  // Statistici globale pentru luna curentă (Mockate cu 0 momentan)
   const totalBarbersCount = barbers.length;
-  const totalMonthlyRevenue = 0; // Aici vom aduna câștigurile tuturor frizerilor pe luna curentă
 
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-[80vh]">
         <div className="w-12 h-12 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin mb-4"></div>
         <p className="text-cyan-400 font-medium animate-pulse">
-          Se încarcă rapoartele financiare...
+          Se calculează încasările reale...
         </p>
       </div>
     );
@@ -82,11 +115,11 @@ export default function FinanceDashboard() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-white mb-2">Raport Financiar</h1>
         <p className="text-slate-400">
-          Situația financiară globală și per angajat/shop.
+          Situația financiară globală calculată la zi.
         </p>
       </div>
 
-      {/* 1. Cele 3 Carduri Principale de Raport */}
+      {/* 1. Cele 3 Carduri Principale */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
         {/* Card: Total Cash Luna Asta */}
         <div className="bg-white/5 border border-white/10 p-6 rounded-[2rem] flex flex-col justify-between relative overflow-hidden group hover:bg-white/10 transition-all">
@@ -97,7 +130,7 @@ export default function FinanceDashboard() {
                 Încasări (Luna Curentă)
               </p>
               <p className="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-cyan-400 mt-1">
-                {totalMonthlyRevenue.toLocaleString("ro-RO")} RON
+                {globalMonthlyRevenue.toLocaleString("ro-RO")} RON
               </p>
             </div>
             <div className="w-12 h-12 rounded-2xl bg-green-500/20 text-green-400 flex items-center justify-center border border-green-500/30">
@@ -117,8 +150,9 @@ export default function FinanceDashboard() {
             </div>
           </div>
           <div className="z-10 mt-2">
-            <span className="text-slate-500 text-xs font-medium bg-black/30 px-3 py-1.5 rounded-lg border border-white/5">
-              În așteptarea primelor încasări
+            <span className="text-green-400/80 text-xs font-bold bg-green-500/10 px-3 py-1.5 rounded-lg border border-green-500/20 flex items-center gap-1 w-max">
+              <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>{" "}
+              Calculat automat
             </span>
           </div>
         </div>
@@ -257,7 +291,7 @@ export default function FinanceDashboard() {
                       key={barber.id}
                       className={`border-b border-white/5 transition-colors ${!isActive ? "opacity-60" : "hover:bg-white/5"}`}
                     >
-                      {/* Coloana 1: Nume Frizer */}
+                      {/* Nume */}
                       <td className="py-4 pl-2 align-middle">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-white font-bold border border-white/10 shrink-0">
@@ -276,7 +310,7 @@ export default function FinanceDashboard() {
                         </div>
                       </td>
 
-                      {/* Coloana 2: Shop */}
+                      {/* Shop */}
                       <td className="py-4 align-middle">
                         <p className="text-white font-medium">
                           {barber.shop_name ? (
@@ -289,7 +323,7 @@ export default function FinanceDashboard() {
                         </p>
                       </td>
 
-                      {/* Coloana 3: Bani */}
+                      {/* Bani */}
                       <td className="py-4 text-right align-middle font-mono">
                         <span className="text-cyan-400 font-bold text-lg">
                           {monthlyRev.toLocaleString("ro-RO")}
@@ -297,7 +331,7 @@ export default function FinanceDashboard() {
                         <span className="text-slate-500 text-sm">RON</span>
                       </td>
 
-                      {/* Coloana 4: Acțiuni (Buton Analiză / Grafic) */}
+                      {/* Buton Raport */}
                       <td className="py-4 text-right pr-2 align-middle">
                         <Link
                           href={`/admin/finance/${barber.id}`}
@@ -316,7 +350,7 @@ export default function FinanceDashboard() {
                               d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"
                             />
                           </svg>
-                          Vezi Raport
+                          Vezi Detalii
                         </Link>
                       </td>
                     </tr>
