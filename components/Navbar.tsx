@@ -6,66 +6,75 @@ export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
-    // Am adăugat puțin padding sus pentru a lăsa meniul să "plutească"
-    <nav className="pt-6 pb-4 relative z-50">
+    <nav className="pt-6 pb-4 relative z-50 w-full">
       {/* Containerul Liquid Glass Principal */}
-      <div
-        className="flex items-center justify-between px-6 py-4 md:px-8 
-                      bg-white/5 backdrop-blur-lg border border-white/10 
-                      rounded-3xl shadow-[0_8px_32px_0_rgba(0,0,0,0.2)] transition-all"
-      >
+      <div className="flex items-center justify-between px-6 py-5 md:px-10 bg-white/5 backdrop-blur-2xl border border-white/20 rounded-[2.5rem] shadow-2xl relative overflow-hidden transition-all">
+        <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent"></div>
+
         {/* Logo */}
         <Link
           href="/"
-          className="text-2xl md:text-3xl font-extrabold tracking-wider text-white"
+          className="text-2xl md:text-4xl font-black tracking-tight text-white flex items-center gap-3 hover:scale-[1.02] transition-transform relative z-10"
         >
-          Barber<span className="text-cyan-400">App</span>
+          Barber
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400">
+            App
+          </span>
         </Link>
 
         {/* Desktop Menu */}
-        <div className="hidden md:flex items-center gap-8 text-sm md:text-base font-medium text-slate-200">
-          <Link href="#acasa" className="hover:text-cyan-400 transition-colors">
+        <div className="hidden lg:flex items-center gap-4 text-base font-bold text-slate-300 relative z-10">
+          <Link
+            href="#acasa"
+            className="px-5 py-2.5 rounded-xl hover:text-cyan-400 hover:bg-white/5 transition-all"
+          >
             Acasă
           </Link>
           <Link
             href="#servicii"
-            className="hover:text-cyan-400 transition-colors"
+            className="px-5 py-2.5 rounded-xl hover:text-cyan-400 hover:bg-white/5 transition-all"
           >
             Servicii
           </Link>
           <Link
+            href="#reguli"
+            className="px-5 py-2.5 rounded-xl hover:text-cyan-400 hover:bg-white/5 transition-all"
+          >
+            Reguli
+          </Link>
+          <Link
             href="#recenzii"
-            className="hover:text-cyan-400 transition-colors"
+            className="px-5 py-2.5 rounded-xl hover:text-cyan-400 hover:bg-white/5 transition-all"
           >
             Recenzii
           </Link>
           <Link
             href="#contact"
-            className="hover:text-cyan-400 transition-colors"
+            className="px-5 py-2.5 rounded-xl hover:text-cyan-400 hover:bg-white/5 transition-all"
           >
             Contact
           </Link>
         </div>
 
         {/* Desktop Buttons */}
-        <div className="hidden md:flex gap-4">
+        <div className="hidden lg:flex gap-4 relative z-10">
           <Link
             href="/login"
-            className="px-6 py-2.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/20 transition-all text-sm font-medium"
+            className="px-8 py-3.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all text-sm font-bold text-white shadow-sm"
           >
-            Logare
+            Autentificare
           </Link>
           <Link
             href="/register"
-            className="px-6 py-2.5 rounded-2xl bg-cyan-500/90 hover:bg-cyan-400 transition-all text-sm font-medium text-[#000428] shadow-[0_0_20px_rgba(34,211,238,0.3)]"
+            className="px-8 py-3.5 rounded-2xl bg-cyan-500 hover:bg-cyan-400 transition-all text-sm font-black text-[#000428] shadow-[0_0_20px_rgba(34,211,238,0.3)] hover:shadow-[0_0_30px_rgba(34,211,238,0.5)] hover:scale-105"
           >
-            Înregistrare
+            Creare Cont
           </Link>
         </div>
 
         {/* Mobile Burger Button */}
         <button
-          className="md:hidden p-1 text-slate-200 hover:text-white transition-colors focus:outline-none"
+          className="lg:hidden p-2.5 rounded-xl bg-white/5 border border-white/10 text-slate-200 hover:text-cyan-400 hover:bg-white/10 transition-all relative z-10"
           onClick={() => setIsOpen(!isOpen)}
         >
           <svg
@@ -78,14 +87,14 @@ export default function Navbar() {
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                strokeWidth="2"
+                strokeWidth="2.5"
                 d="M6 18L18 6M6 6l12 12"
               />
             ) : (
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                strokeWidth="2"
+                strokeWidth="2.5"
                 d="M4 6h16M4 12h16M4 18h16"
               />
             )}
@@ -93,53 +102,59 @@ export default function Navbar() {
         </button>
       </div>
 
-      {/* Mobile Menu Dropdown - Liquid Glass pt Mobil */}
+      {/* Mobile Menu Dropdown */}
       {isOpen && (
-        <div
-          className="md:hidden absolute top-full left-0 w-full mt-4 
-                        bg-[#002E5D]/40 backdrop-blur-xl border border-white/10 
-                        rounded-3xl flex flex-col items-center py-8 gap-6 shadow-[0_8px_32px_0_rgba(0,0,0,0.5)] z-50"
-        >
+        <div className="lg:hidden absolute top-full left-4 right-4 mt-4 bg-[#050505]/95 backdrop-blur-2xl border border-white/20 rounded-[2.5rem] p-8 flex flex-col gap-4 shadow-2xl z-50 animate-fade-in overflow-hidden">
+          <div className="absolute top-0 right-0 w-48 h-48 bg-cyan-500/10 rounded-full blur-[60px] pointer-events-none"></div>
+
           <Link
             href="#acasa"
             onClick={() => setIsOpen(false)}
-            className="text-lg text-slate-200 hover:text-cyan-400"
+            className="text-xl font-bold text-slate-300 hover:text-cyan-400 py-2 border-b border-white/5"
           >
             Acasă
           </Link>
           <Link
             href="#servicii"
             onClick={() => setIsOpen(false)}
-            className="text-lg text-slate-200 hover:text-cyan-400"
+            className="text-xl font-bold text-slate-300 hover:text-cyan-400 py-2 border-b border-white/5"
           >
             Servicii
           </Link>
           <Link
+            href="#reguli"
+            onClick={() => setIsOpen(false)}
+            className="text-xl font-bold text-slate-300 hover:text-cyan-400 py-2 border-b border-white/5"
+          >
+            Reguli
+          </Link>
+          <Link
             href="#recenzii"
             onClick={() => setIsOpen(false)}
-            className="text-lg text-slate-200 hover:text-cyan-400"
+            className="text-xl font-bold text-slate-300 hover:text-cyan-400 py-2 border-b border-white/5"
           >
             Recenzii
           </Link>
           <Link
             href="#contact"
             onClick={() => setIsOpen(false)}
-            className="text-lg text-slate-200 hover:text-cyan-400"
+            className="text-xl font-bold text-slate-300 hover:text-cyan-400 py-2"
           >
             Contact
           </Link>
-          <div className="flex flex-col w-full px-8 gap-4 mt-4 border-t border-white/10 pt-6">
+
+          <div className="flex flex-col gap-4 mt-6 pt-6 border-t border-white/10 relative z-10">
             <Link
               href="/login"
-              className="w-full text-center px-6 py-3 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors"
+              className="w-full text-center px-6 py-4 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-white font-bold transition-all shadow-sm"
             >
-              Logare
+              Autentificare
             </Link>
             <Link
               href="/register"
-              className="w-full text-center px-6 py-3 rounded-2xl bg-cyan-500 text-[#000428] font-bold shadow-[0_0_15px_rgba(34,211,238,0.4)]"
+              className="w-full text-center px-6 py-4 rounded-xl bg-cyan-500 text-[#000428] font-black shadow-[0_0_20px_rgba(34,211,238,0.4)]"
             >
-              Înregistrare
+              Creare Cont
             </Link>
           </div>
         </div>

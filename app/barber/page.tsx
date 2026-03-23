@@ -9,7 +9,7 @@ import {
 } from "@/app/actions/appointmentActions";
 import {
   addCustomDayOffAction,
-  removeCustomDayOffAction, // Funcția nouă de deblocare
+  removeCustomDayOffAction,
 } from "@/app/actions/barberScheduleActions";
 
 type Appointment = {
@@ -72,8 +72,9 @@ export default function BarberDashboardPage() {
   const [nextAppointment, setNextAppointment] = useState<Appointment | null>(
     null,
   );
-  const [blockedDays, setBlockedDays] = useState<string[]>([]); // Zilele de concediu curente
+  const [blockedDays, setBlockedDays] = useState<string[]>([]);
 
+  // ================= MODAL STATES =================
   const [rescheduleData, setRescheduleData] = useState<{
     id: string;
     date: string;
@@ -83,6 +84,25 @@ export default function BarberDashboardPage() {
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [leaveDate, setLeaveDate] = useState("");
   const [calendarViewDate, setCalendarViewDate] = useState(new Date());
+
+  // Confirm Modal Universal
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    buttonText: string;
+    buttonColor: "red" | "cyan" | "orange";
+    action: () => Promise<void>;
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    buttonText: "",
+    buttonColor: "cyan",
+    action: async () => {},
+  });
+
+  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     fetchDashboardData();
@@ -101,7 +121,6 @@ export default function BarberDashboardPage() {
     }
     setBarberId(user.id);
 
-    // Luăm profilul
     const { data: profile } = await supabase
       .from("profiles")
       .select("first_name")
@@ -111,7 +130,6 @@ export default function BarberDashboardPage() {
 
     const todayStr = new Date().toISOString().split("T")[0];
 
-    // Luăm zilele libere (concediile viitoare)
     const { data: settings } = await supabase
       .from("barber_settings")
       .select("custom_days_off")
@@ -119,7 +137,6 @@ export default function BarberDashboardPage() {
       .maybeSingle();
 
     if (settings && settings.custom_days_off) {
-      // Afișăm doar zilele blocate de azi încolo (curățăm UI-ul de cele trecute)
       const futureBlocked = settings.custom_days_off
         .filter((d: string) => d >= todayStr)
         .sort();
@@ -128,7 +145,6 @@ export default function BarberDashboardPage() {
       setBlockedDays([]);
     }
 
-    // Luăm programările de AZI
     const { data: apps } = await supabase
       .from("appointments")
       .select("*")
@@ -161,47 +177,81 @@ export default function BarberDashboardPage() {
 
   const submitReschedule = async () => {
     if (!rescheduleData || !barberId) return;
+    setIsProcessing(true);
     const result = await rescheduleAppointmentAction(
       rescheduleData.id,
       rescheduleData.date,
       rescheduleData.time,
     );
+    setIsProcessing(false);
     if (result.success) {
       setRescheduleData(null);
       fetchDashboardData();
     }
   };
 
-  const handleTakeLeave = async () => {
+  // --- ÎNLOCUIRE ALERTE CU MODALE ---
+  const triggerTakeLeave = () => {
     if (!leaveDate || !barberId) return;
-    if (
-      window.confirm(
-        `Ești sigur că vrei să blochezi data de ${leaveDate}? Toate programările din acea zi vor fi șterse automat!`,
-      )
-    ) {
-      const result = await addCustomDayOffAction(barberId, leaveDate);
-      if (result.success) {
-        setShowLeaveModal(false);
-        setLeaveDate("");
-        fetchDashboardData();
-      }
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: "Confirmare Zi Liberă",
+      message: `Blochezi data de ${new Date(leaveDate).toLocaleDateString("ro-RO")}? Orice programare existentă în această zi va fi ștearsă automat!`,
+      buttonText: "Blochează Ziua",
+      buttonColor: "orange",
+      action: async () => {
+        setIsProcessing(true);
+        const result = await addCustomDayOffAction(barberId, leaveDate);
+        setIsProcessing(false);
+        if (result.success) {
+          setShowLeaveModal(false);
+          setLeaveDate("");
+          fetchDashboardData();
+        }
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+      },
+    });
   };
 
-  const handleRemoveLeave = async (dateStr: string) => {
+  const triggerRemoveLeave = (dateStr: string) => {
     if (!barberId) return;
-    if (
-      window.confirm(
-        `Vrei să redeschizi data de ${new Date(dateStr).toLocaleDateString("ro-RO")} pentru programări?`,
-      )
-    ) {
-      const result = await removeCustomDayOffAction(barberId, dateStr);
-      if (result.success) {
-        fetchDashboardData();
-      }
-    }
+    setConfirmModal({
+      isOpen: true,
+      title: "Deblocare Zi",
+      message: `Vrei să redeschizi data de ${new Date(dateStr).toLocaleDateString("ro-RO")} pentru programări noi?`,
+      buttonText: "Deblochează",
+      buttonColor: "cyan",
+      action: async () => {
+        setIsProcessing(true);
+        const result = await removeCustomDayOffAction(barberId, dateStr);
+        setIsProcessing(false);
+        if (result.success) fetchDashboardData();
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+      },
+    });
   };
 
+  const triggerDeleteAppointment = (id: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: "Ștergere Definitivă",
+      message:
+        "Ești sigur că vrei să ștergi această programare? Acțiunea nu poate fi anulată și va dispărea din istoric.",
+      buttonText: "Șterge Acum",
+      buttonColor: "red",
+      action: async () => {
+        setIsProcessing(true);
+        const { deleteAppointmentAction } =
+          await import("@/app/actions/appointmentActions");
+        await deleteAppointmentAction(id);
+        setIsProcessing(false);
+        fetchDashboardData();
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+      },
+    });
+  };
+
+  // Calendar Engine
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const viewYear = calendarViewDate.getFullYear();
@@ -229,9 +279,9 @@ export default function BarberDashboardPage() {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-[80vh]">
-        <div className="w-12 h-12 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p className="text-cyan-400 font-medium animate-pulse">
-          Se pregătește panoul de control...
+        <div className="w-10 h-10 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin mb-4 shadow-[0_0_15px_rgba(34,211,238,0.5)]"></div>
+        <p className="text-cyan-400 font-bold uppercase tracking-widest text-[10px] animate-pulse">
+          Se încarcă agenda...
         </p>
       </div>
     );
@@ -242,14 +292,18 @@ export default function BarberDashboardPage() {
   ).length;
 
   return (
-    <div className="animate-fade-in max-w-6xl mx-auto pb-10">
+    <div className="animate-fade-in max-w-6xl mx-auto pb-10 relative">
+      {/* HEADER */}
       <div className="mb-8">
-        <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">
+        <h1 className="text-3xl sm:text-4xl font-black text-white mb-1 tracking-tight">
           Salutare,{" "}
-          <span className="text-cyan-400">{barberName || "Frizer"}</span>! ✂️
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">
+            {barberName || "Frizer"}
+          </span>
+          ! ✂️
         </h1>
-        <p className="text-slate-400 text-lg">
-          Iată situația ta pentru astăzi,{" "}
+        <p className="text-slate-400 font-medium">
+          Iată situația ta pentru{" "}
           {new Date().toLocaleDateString("ro-RO", {
             weekday: "long",
             day: "numeric",
@@ -259,76 +313,73 @@ export default function BarberDashboardPage() {
         </p>
       </div>
 
-      {/* 3 PANOURI */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-10">
-        <div className="bg-cyan-500/10 border border-cyan-500/20 p-6 rounded-3xl relative overflow-hidden group">
-          <div className="absolute -right-6 -top-6 w-24 h-24 bg-cyan-500/20 rounded-full blur-2xl transition-all"></div>
-          <p className="text-cyan-400/80 text-xs font-bold uppercase tracking-wider mb-2 relative z-10">
+      {/* 3 PANOURI LIQUID GLASS */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
+        <div className="bg-white/5 backdrop-blur-xl border border-white/20 p-6 rounded-[2rem] relative overflow-hidden group shadow-xl flex flex-col justify-center">
+          <div className="absolute -right-6 -top-6 w-32 h-32 bg-cyan-500/10 rounded-full blur-[40px] transition-all pointer-events-none group-hover:bg-cyan-500/20"></div>
+          <p className="text-cyan-400/90 text-[10px] font-black uppercase tracking-widest mb-2 relative z-10">
             Programări Azi
           </p>
           <div className="flex items-end gap-3 relative z-10">
-            <span className="text-5xl font-black text-cyan-400 leading-none">
+            <span className="text-5xl font-black text-white leading-none">
               {activeTodayCount}
             </span>
-            <span className="text-slate-400 font-medium mb-1">
+            <span className="text-slate-300 text-sm font-medium mb-1">
               clienți activi
             </span>
           </div>
         </div>
 
-        <div className="bg-purple-500/10 border border-purple-500/20 p-6 rounded-3xl relative overflow-hidden flex flex-col justify-center">
-          <div className="absolute -right-6 -top-6 w-24 h-24 bg-purple-500/20 rounded-full blur-2xl transition-all"></div>
-          <p className="text-purple-400/80 text-xs font-bold uppercase tracking-wider mb-3 relative z-10">
+        <div className="bg-white/5 backdrop-blur-xl border border-white/20 p-6 rounded-[2rem] relative overflow-hidden flex flex-col justify-center shadow-xl group">
+          <div className="absolute -right-6 -top-6 w-32 h-32 bg-purple-500/10 rounded-full blur-[40px] transition-all pointer-events-none group-hover:bg-purple-500/20"></div>
+          <p className="text-purple-400/90 text-[10px] font-black uppercase tracking-widest mb-3 relative z-10">
             Următorul Client
           </p>
-
           {nextAppointment ? (
             <div className="relative z-10">
-              <p className="text-xl font-bold text-white leading-tight mb-1">
+              <p className="text-xl font-bold text-white leading-tight mb-2 line-clamp-1">
                 {nextAppointment.client_name}
               </p>
               <div className="flex items-center gap-2 text-sm">
-                <span className="text-purple-400 font-bold bg-purple-500/20 px-2 py-0.5 rounded-md">
+                <span className="text-purple-400 font-bold bg-purple-500/10 border border-purple-500/30 px-2.5 py-1 rounded-lg text-xs shadow-inner">
                   {nextAppointment.appointment_time.slice(0, 5)}
                 </span>
-                <span className="text-slate-300 line-clamp-1">
+                <span className="text-slate-300 font-medium text-xs line-clamp-1">
                   {nextAppointment.service_name}
                 </span>
               </div>
             </div>
           ) : (
-            <p className="text-slate-400 italic relative z-10">
+            <p className="text-slate-400 italic text-sm relative z-10">
               Nu mai ai clienți programați.
             </p>
           )}
         </div>
 
-        {/* Panou 3: Zile Libere (Updatat cu lista) */}
-        <div className="bg-white/5 border border-white/10 p-6 rounded-3xl relative overflow-hidden flex flex-col justify-between">
-          <div>
-            <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-3">
+        <div className="bg-white/5 backdrop-blur-xl border border-white/20 p-6 rounded-[2rem] relative overflow-hidden flex flex-col justify-between shadow-xl group">
+          <div className="absolute -right-6 -top-6 w-32 h-32 bg-orange-500/10 rounded-full blur-[40px] transition-all pointer-events-none group-hover:bg-orange-500/20"></div>
+          <div className="relative z-10">
+            <p className="text-orange-400/90 text-[10px] font-black uppercase tracking-widest mb-3">
               Zile Libere / Concediu
             </p>
-
-            {/* Lista cu zile blocate */}
             <div className="flex flex-wrap gap-2 mb-4">
               {blockedDays.length === 0 ? (
-                <span className="text-sm text-slate-500 italic">
-                  Nu ai nicio zi liberă programată.
+                <span className="text-sm text-slate-400 font-medium">
+                  Nicio zi liberă setată.
                 </span>
               ) : (
                 blockedDays.map((date) => (
                   <div
                     key={date}
-                    className="flex items-center gap-1 bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-bold px-2.5 py-1.5 rounded-lg"
+                    className="flex items-center gap-1.5 bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs font-bold px-2.5 py-1.5 rounded-lg shadow-inner"
                   >
                     {new Date(date).toLocaleDateString("ro-RO", {
                       day: "numeric",
                       month: "short",
                     })}
                     <button
-                      onClick={() => handleRemoveLeave(date)}
-                      className="ml-1 hover:text-red-400 cursor-pointer transition-colors"
+                      onClick={() => triggerRemoveLeave(date)}
+                      className="ml-1 text-orange-400 hover:text-white transition-colors cursor-pointer"
                       title="Deblochează ziua"
                     >
                       ✕
@@ -338,13 +389,12 @@ export default function BarberDashboardPage() {
               )}
             </div>
           </div>
-
           <button
             onClick={() => setShowLeaveModal(true)}
-            className="cursor-pointer mt-auto w-full bg-white/10 hover:bg-white/20 text-white font-bold py-2.5 rounded-xl transition-all border border-white/10 flex items-center justify-center gap-2"
+            className="cursor-pointer mt-auto w-full bg-white/5 hover:bg-white/10 text-white text-sm font-bold py-3 rounded-xl transition-all border border-white/10 flex items-center justify-center gap-2 shadow-sm relative z-10"
           >
             <svg
-              className="w-4 h-4"
+              className="w-4 h-4 text-orange-400"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -356,106 +406,141 @@ export default function BarberDashboardPage() {
                 d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
               />
             </svg>
-            Ia concediu
+            Programează Concediu
           </button>
         </div>
       </div>
 
-      {/* AGENDA DE AZI */}
-      <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-6 sm:p-8">
-        <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-          📅 Agenda Zilei Curente
+      {/* AGENDA DE AZI LIQUID GLASS */}
+      <div className="bg-white/5 backdrop-blur-2xl border border-white/20 rounded-[2.5rem] p-6 sm:p-8 shadow-2xl relative overflow-hidden flex flex-col">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/10 rounded-full blur-[100px] pointer-events-none"></div>
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-500/40 via-purple-500/40 to-cyan-500/40"></div>
+
+        <h3 className="text-xl font-black text-white mb-6 flex items-center gap-3 relative z-10">
+          <div className="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20 text-cyan-400 shadow-inner">
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+              />
+            </svg>
+          </div>
+          Agenda Zilei Curente
         </h3>
 
         {todayAppointments.length === 0 ? (
-          <div className="text-center py-16 bg-black/20 rounded-2xl border border-white/5">
-            <p className="text-slate-400 font-medium text-lg">
+          <div className="text-center py-16 relative z-10">
+            <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4 border border-white/10 text-3xl shadow-inner">
+              ☕
+            </div>
+            <p className="text-white font-bold text-xl mb-1">
               Ai zi liberă momentan.
             </p>
-            <p className="text-sm text-slate-500 mt-1">
-              Nu este înregistrată nicio programare pentru ziua de azi.
+            <p className="text-sm text-slate-400">
+              Nu este înregistrată nicio programare pentru azi.
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto custom-scrollbar">
+          <div className="overflow-auto custom-scrollbar max-h-[500px] rounded-2xl border border-white/10 bg-black/20 relative z-10 shadow-inner">
             <table className="w-full text-left border-collapse min-w-[700px]">
-              <thead>
-                <tr className="text-slate-400 border-b border-white/10 text-xs uppercase tracking-wider">
-                  <th className="pb-4 font-medium pl-2 w-24">Ora</th>
-                  <th className="pb-4 font-medium">Client & Contact</th>
-                  <th className="pb-4 font-medium">Serviciu</th>
-                  <th className="pb-4 font-medium text-right pr-2">Acțiuni</th>
+              <thead className="sticky top-0 z-20 bg-[#0a0a0a]/90 backdrop-blur-xl border-b border-white/20 shadow-md">
+                <tr className="text-slate-300 text-[10px] uppercase tracking-widest font-black">
+                  <th className="py-4 pl-6 w-24">Ora</th>
+                  <th className="py-4">Client & Contact</th>
+                  <th className="py-4">Serviciu</th>
+                  <th className="py-4 text-right pr-6">Acțiuni Operative</th>
                 </tr>
               </thead>
-              <tbody className="text-slate-300">
+              <tbody className="text-white text-base">
                 {todayAppointments.map((app) => {
                   const isPending = app.status === "pending";
                   const isConfirmed = app.status === "confirmed";
                   const isCancelled = app.status === "cancelled";
-                  const isRescheduled = app.status === "rescheduled"; // STATUS NOU
+                  const isRescheduled = app.status === "rescheduled";
 
                   return (
                     <tr
                       key={app.id}
-                      className={`border-b border-white/5 transition-colors group ${isCancelled ? "opacity-50" : "hover:bg-white/5"}`}
+                      className={`border-b border-white/5 transition-colors group ${isCancelled ? "bg-white/[0.03] hover:bg-white/[0.06]" : "hover:bg-white/5"}`}
                     >
-                      <td className="py-4 pl-2 align-middle">
-                        <div className="flex items-center gap-2">
+                      {/* ORA */}
+                      <td className="py-5 pl-6 align-middle">
+                        <div className="flex items-center gap-2.5">
                           <span
-                            className={`text-lg font-mono font-bold ${isCancelled ? "text-slate-500" : isRescheduled ? "text-orange-400" : "text-cyan-400"}`}
+                            className={`text-xl font-mono font-black ${isCancelled ? "text-slate-500" : isRescheduled ? "text-orange-400" : "text-cyan-400"}`}
                           >
                             {app.appointment_time.slice(0, 5)}
                           </span>
                           {isPending && (
                             <span
-                              className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"
+                              className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse shadow-[0_0_8px_rgba(250,204,21,0.6)]"
                               title="În Așteptare"
                             ></span>
                           )}
                           {isConfirmed && (
                             <span
-                              className="w-2 h-2 rounded-full bg-green-500"
+                              className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"
                               title="Confirmat"
                             ></span>
                           )}
                           {isRescheduled && (
                             <span
-                              className="w-2 h-2 rounded-full bg-orange-400 animate-pulse"
+                              className="w-2 h-2 rounded-full bg-orange-400 animate-pulse shadow-[0_0_8px_rgba(249,115,22,0.6)]"
                               title="Așteaptă Răspuns"
                             ></span>
                           )}
                         </div>
                       </td>
-                      <td className="py-4 align-middle">
+
+                      {/* CLIENT */}
+                      <td className="py-5 align-middle">
                         <p
-                          className={`font-bold text-base mb-0.5 ${isCancelled ? "text-slate-400 line-through" : "text-white"}`}
+                          className={`font-bold text-lg tracking-tight mb-0.5 ${isCancelled ? "text-slate-500 line-through decoration-slate-600" : "text-white"}`}
                         >
                           {app.client_name}
                         </p>
-                        <p className="text-xs text-slate-500 font-mono">
+                        <p
+                          className={`text-xs font-mono font-bold ${isCancelled ? "text-slate-600" : "text-slate-400"}`}
+                        >
                           📞 {app.client_phone || "-"}
                         </p>
                       </td>
-                      <td className="py-4 align-middle">
-                        <p className="text-slate-300 font-medium">
+
+                      {/* SERVICIU */}
+                      <td className="py-5 align-middle">
+                        <p
+                          className={`font-bold text-base tracking-tight mb-0.5 ${isCancelled ? "text-slate-500" : "text-slate-200"}`}
+                        >
                           {app.service_name}
                         </p>
-                        <p className="text-xs text-cyan-500/70 font-bold">
+                        <p
+                          className={`text-xs font-black ${isCancelled ? "text-slate-600" : "text-cyan-400/80"}`}
+                        >
                           {app.price} RON
                         </p>
                       </td>
-                      <td className="py-4 text-right pr-2 align-middle">
-                        <div className="flex justify-end gap-2">
+
+                      {/* ACȚIUNI */}
+                      <td className="py-5 text-right pr-6 align-middle">
+                        <div className="flex justify-end gap-2 items-center">
                           {!isConfirmed && !isCancelled && !isRescheduled && (
                             <button
                               onClick={() =>
                                 handleStatusChange(app.id, "confirmed")
                               }
-                              className="cursor-pointer px-3 py-1.5 rounded-lg bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/20 transition-all text-xs font-bold"
+                              className="cursor-pointer px-4 py-2 rounded-xl bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/30 transition-all text-xs font-bold shadow-sm"
                             >
                               ✓ Confirmă
                             </button>
                           )}
+
                           {!isCancelled && (
                             <button
                               onClick={() =>
@@ -466,44 +551,37 @@ export default function BarberDashboardPage() {
                                   name: app.client_name,
                                 })
                               }
-                              className="cursor-pointer px-3 py-1.5 rounded-lg bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 border border-yellow-500/20 transition-all text-xs font-bold"
+                              className="cursor-pointer px-4 py-2 rounded-xl bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 transition-all text-xs font-bold shadow-sm"
                             >
                               ↻ Mută
                             </button>
                           )}
+
                           {!isCancelled && (
                             <button
                               onClick={() =>
                                 handleStatusChange(app.id, "cancelled")
                               }
-                              className="cursor-pointer px-3 py-1.5 rounded-lg bg-white/5 hover:bg-red-500/10 text-slate-400 hover:text-red-400 border border-transparent hover:border-red-500/30 transition-all text-xs font-bold"
+                              className="cursor-pointer px-4 py-2 rounded-xl bg-white/5 hover:bg-red-500/10 text-slate-300 hover:text-red-400 border border-white/10 hover:border-red-500/30 transition-all text-xs font-bold shadow-sm"
                             >
                               ✕ Anulează
                             </button>
                           )}
 
-                          {/* BUTOANE PENTRU CELE ANULATE / RESCHEDULED */}
                           {isRescheduled && (
-                            <span className="px-3 py-1.5 rounded-lg bg-orange-500/5 text-orange-400/80 border border-orange-500/10 text-xs font-bold">
+                            <span className="px-4 py-2 rounded-xl bg-orange-500/10 text-orange-400 border border-orange-500/20 text-xs font-bold shadow-inner">
                               Așteaptă Client
                             </span>
                           )}
+
                           {isCancelled && (
                             <>
-                              <span className="px-3 py-1.5 rounded-lg bg-red-500/5 text-red-500/50 border border-red-500/10 text-xs font-bold">
+                              <span className="px-4 py-2 rounded-xl bg-slate-800 text-slate-400 border border-white/5 text-xs font-bold">
                                 Anulat
                               </span>
                               <button
-                                onClick={async () => {
-                                  const { deleteAppointmentAction } =
-                                    await import("@/app/actions/appointmentActions");
-                                  if (window.confirm("Ștergi definitiv?")) {
-                                    await deleteAppointmentAction(app.id);
-                                    fetchDashboardData();
-                                  }
-                                }}
-                                className="cursor-pointer px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 transition-all text-xs font-bold"
-                                title="Șterge definitiv"
+                                onClick={() => triggerDeleteAppointment(app.id)}
+                                className="cursor-pointer px-4 py-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 transition-all text-xs font-bold flex items-center gap-1 shadow-sm"
                               >
                                 🗑️ Șterge
                               </button>
@@ -520,197 +598,285 @@ export default function BarberDashboardPage() {
         )}
       </div>
 
-      {rescheduleData && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-[#0a0a0a] border border-cyan-500/30 p-6 sm:p-8 rounded-[2rem] w-full max-w-md shadow-[0_0_30px_rgba(34,211,238,0.1)]">
-            <h3 className="text-xl font-bold text-white mb-1">Reprogramare</h3>
-            <p className="text-cyan-400 font-medium mb-6">
-              Client: {rescheduleData.name}
-            </p>
-            <div className="space-y-4 mb-8">
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
-                  Ziua Nouă
-                </label>
-                <select
-                  value={rescheduleData.date}
-                  onChange={(e) =>
-                    setRescheduleData({
-                      ...rescheduleData,
-                      date: e.target.value,
-                    })
-                  }
-                  className="cursor-pointer w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-cyan-400 appearance-none"
-                >
-                  {NEXT_DAYS.map((d) => (
-                    <option key={`modal-date-${d.value}`} value={d.value}>
-                      {d.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">
-                  Ora Nouă
-                </label>
-                <select
-                  value={rescheduleData.time}
-                  onChange={(e) =>
-                    setRescheduleData({
-                      ...rescheduleData,
-                      time: e.target.value,
-                    })
-                  }
-                  className="cursor-pointer w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-cyan-400 font-mono font-bold outline-none focus:border-cyan-400 appearance-none"
-                >
-                  {TIME_SLOTS.map((t) => (
-                    <option key={`modal-time-${t}`} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              </div>
+      {/* ================= MODALE LIQUID GLASS PREMIUM ================= */}
+
+      {/* Modal Confirmare Universal */}
+      {confirmModal.isOpen && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div
+            className={`bg-[#050505]/95 backdrop-blur-2xl border p-8 rounded-[2.5rem] w-full max-w-sm shadow-2xl relative overflow-hidden ${confirmModal.buttonColor === "red" ? "border-red-500/30" : confirmModal.buttonColor === "orange" ? "border-orange-500/30" : "border-cyan-500/30"}`}
+          >
+            <div className="absolute top-0 left-0 w-full h-1 bg-white/10"></div>
+
+            <div
+              className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 border-4 shadow-inner relative z-10 ${confirmModal.buttonColor === "red" ? "bg-red-500/10 border-red-500/20 text-red-400" : confirmModal.buttonColor === "orange" ? "bg-orange-500/10 border-orange-500/20 text-orange-400" : "bg-cyan-500/10 border-cyan-500/20 text-cyan-400"}`}
+            >
+              <svg
+                className="w-8 h-8"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2.5"
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
+              </svg>
             </div>
-            <div className="flex gap-3">
+
+            <h3 className="text-xl font-black text-white mb-2 text-center tracking-tight relative z-10">
+              {confirmModal.title}
+            </h3>
+            <p className="text-slate-300 text-sm mb-8 text-center font-medium leading-relaxed relative z-10">
+              {confirmModal.message}
+            </p>
+
+            <div className="flex gap-3 relative z-10">
               <button
-                onClick={() => setRescheduleData(null)}
-                className="cursor-pointer flex-1 bg-white/5 hover:bg-white/10 text-white font-bold py-3 rounded-xl transition-all border border-transparent hover:border-white/10"
+                onClick={() =>
+                  setConfirmModal((prev) => ({ ...prev, isOpen: false }))
+                }
+                className="flex-1 py-3.5 rounded-xl bg-white/5 border border-white/10 text-slate-300 text-sm font-bold hover:bg-white/10 transition-all cursor-pointer shadow-sm"
               >
                 Anulează
               </button>
               <button
-                onClick={submitReschedule}
-                className="cursor-pointer flex-1 bg-cyan-500 hover:bg-cyan-400 text-[#000428] font-bold py-3 rounded-xl transition-all shadow-[0_0_15px_rgba(34,211,238,0.3)]"
+                onClick={confirmModal.action}
+                disabled={isProcessing}
+                className={`flex-1 py-3.5 rounded-xl text-[#0a0a0a] text-sm font-black transition-all cursor-pointer disabled:opacity-50 shadow-lg ${confirmModal.buttonColor === "red" ? "bg-red-500 hover:bg-red-400 shadow-[0_0_15px_rgba(239,68,68,0.4)]" : confirmModal.buttonColor === "orange" ? "bg-orange-500 hover:bg-orange-400 shadow-[0_0_15px_rgba(249,115,22,0.4)]" : "bg-cyan-500 hover:bg-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.4)]"}`}
               >
-                Confirmă
+                {isProcessing ? "Așteaptă..." : confirmModal.buttonText}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* --- MODAL IA-ȚI LIBER --- */}
-      {showLeaveModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-[#0a0a0a] border border-orange-500/20 p-5 sm:p-7 rounded-[2rem] w-full max-w-sm shadow-[0_0_30px_rgba(249,115,22,0.1)]">
-            <div className="text-center mb-5">
-              <h3 className="text-xl font-bold text-white">
-                Selectează Ziua Liberă
+      {/* Modal Reprogramare */}
+      {rescheduleData && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-[#050505]/95 backdrop-blur-2xl border border-yellow-500/30 p-8 rounded-[2.5rem] w-full max-w-md shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-48 h-48 bg-yellow-500/10 rounded-full blur-[60px] pointer-events-none"></div>
+
+            <div className="relative z-10 mb-6">
+              <h3 className="text-2xl font-black text-white tracking-tight mb-1">
+                Reprogramare
               </h3>
-              <p className="text-xs text-orange-400 mt-1">
-                Alege data pe care vrei să o blochezi.
+              <p className="text-slate-400 text-sm font-medium">
+                Mută programarea pentru{" "}
+                <span className="text-yellow-400 font-bold">
+                  {rescheduleData.name}
+                </span>
+                .
               </p>
             </div>
 
-            <div className="flex items-center justify-between mb-4 bg-white/5 rounded-xl p-1.5 border border-white/5">
-              <button
-                onClick={() =>
-                  setCalendarViewDate(new Date(viewYear, viewMonth - 1, 1))
-                }
-                className="cursor-pointer p-2 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
-              >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M15 19l-7-7 7-7"
-                  />
-                </svg>
-              </button>
-              <span className="font-bold text-white text-sm tracking-wide">
-                {monthNames[viewMonth]} {viewYear}
-              </span>
-              <button
-                onClick={() =>
-                  setCalendarViewDate(new Date(viewYear, viewMonth + 1, 1))
-                }
-                className="cursor-pointer p-2 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
-              >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M9 5l7 7-7 7"
-                  />
-                </svg>
-              </button>
+            <div className="space-y-5 mb-8 relative z-10">
+              <div>
+                <label className="block text-[10px] font-bold text-yellow-400/80 uppercase tracking-widest mb-1.5 ml-1">
+                  Ziua Nouă
+                </label>
+                <div className="relative">
+                  <select
+                    value={rescheduleData.date}
+                    onChange={(e) =>
+                      setRescheduleData({
+                        ...rescheduleData,
+                        date: e.target.value,
+                      })
+                    }
+                    className="cursor-pointer w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3.5 text-white text-sm outline-none focus:border-yellow-400 appearance-none shadow-inner font-medium"
+                  >
+                    {NEXT_DAYS.map((d) => (
+                      <option
+                        key={`modal-date-${d.value}`}
+                        value={d.value}
+                        className="bg-[#0a0a0a]"
+                      >
+                        {d.label}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                    ▼
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-yellow-400/80 uppercase tracking-widest mb-1.5 ml-1">
+                  Ora Nouă
+                </label>
+                <div className="relative">
+                  <select
+                    value={rescheduleData.time}
+                    onChange={(e) =>
+                      setRescheduleData({
+                        ...rescheduleData,
+                        time: e.target.value,
+                      })
+                    }
+                    className="cursor-pointer w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3.5 text-yellow-400 text-base font-black font-mono outline-none focus:border-yellow-400 appearance-none shadow-inner"
+                  >
+                    {TIME_SLOTS.map((t) => (
+                      <option
+                        key={`modal-time-${t}`}
+                        value={t}
+                        className="bg-[#0a0a0a]"
+                      >
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                    ▼
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div className="mb-6">
-              <div className="grid grid-cols-7 gap-1 mb-2">
-                {["Lu", "Ma", "Mi", "Jo", "Vi", "Sâ", "Du"].map((day) => (
-                  <div
-                    key={day}
-                    className="text-center text-[10px] font-bold text-slate-500 uppercase"
+            <div className="flex gap-3 relative z-10">
+              <button
+                onClick={() => setRescheduleData(null)}
+                className="cursor-pointer flex-1 bg-white/5 border border-white/10 hover:bg-white/10 text-white text-sm font-bold py-3.5 rounded-xl transition-all shadow-sm"
+              >
+                Anulează
+              </button>
+              <button
+                onClick={submitReschedule}
+                disabled={isProcessing}
+                className="cursor-pointer flex-1 bg-yellow-500 hover:bg-yellow-400 text-[#0a0a0a] text-sm font-black py-3.5 rounded-xl transition-all shadow-[0_0_15px_rgba(234,179,8,0.4)] disabled:opacity-50"
+              >
+                {isProcessing ? "..." : "Propune Ora"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Zile Libere */}
+      {showLeaveModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-[#050505]/95 backdrop-blur-2xl border border-orange-500/30 p-6 sm:p-8 rounded-[2.5rem] w-full max-w-sm shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-48 h-48 bg-orange-500/10 rounded-full blur-[60px] pointer-events-none"></div>
+
+            <div className="text-center mb-6 relative z-10">
+              <h3 className="text-2xl font-black text-white tracking-tight mb-1">
+                Zi Liberă
+              </h3>
+              <p className="text-xs text-orange-400 font-medium">
+                Selectează o zi pentru a o bloca în calendar.
+              </p>
+            </div>
+
+            <div className="relative z-10">
+              <div className="flex items-center justify-between mb-5 bg-white/5 rounded-xl p-1.5 border border-white/10 shadow-inner">
+                <button
+                  onClick={() =>
+                    setCalendarViewDate(new Date(viewYear, viewMonth - 1, 1))
+                  }
+                  className="cursor-pointer p-2 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
                   >
-                    {day}
-                  </div>
-                ))}
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M15 19l-7-7 7-7"
+                    />
+                  </svg>
+                </button>
+                <span className="font-bold text-white text-sm tracking-wide capitalize">
+                  {monthNames[viewMonth]} {viewYear}
+                </span>
+                <button
+                  onClick={() =>
+                    setCalendarViewDate(new Date(viewYear, viewMonth + 1, 1))
+                  }
+                  className="cursor-pointer p-2 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M9 5l7 7-7 7"
+                    />
+                  </svg>
+                </button>
               </div>
-              <div className="grid grid-cols-7 gap-1">
-                {blanksArray.map((_, i) => (
-                  <div key={`blank-${i}`} className="aspect-square"></div>
-                ))}
 
-                {daysArray.map((day) => {
-                  const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-                  const cellDate = new Date(viewYear, viewMonth, day);
-
-                  const isPast = cellDate < today;
-                  const isAlreadyBlocked = blockedDays.includes(dateStr); // <-- AICI ESTE MAGIA
-                  const isDisabled = isPast || isAlreadyBlocked;
-                  const isSelected = leaveDate === dateStr;
-                  const isToday = cellDate.getTime() === today.getTime();
-
-                  return (
-                    <button
+              <div className="mb-8">
+                <div className="grid grid-cols-7 gap-1.5 mb-2">
+                  {["Lu", "Ma", "Mi", "Jo", "Vi", "Sâ", "Du"].map((day) => (
+                    <div
                       key={day}
-                      disabled={isDisabled}
-                      onClick={() => setLeaveDate(dateStr)}
-                      className={`
-                        aspect-square flex items-center justify-center rounded-xl text-sm font-medium transition-all
-                        ${isPast ? "text-slate-700 cursor-not-allowed opacity-50" : ""}
-                        ${isAlreadyBlocked ? "bg-red-500/10 text-red-500/50 line-through border border-red-500/20 cursor-not-allowed" : ""}
-                        ${!isDisabled ? "hover:bg-white/10 text-slate-300 cursor-pointer" : ""}
-                        ${isToday && !isSelected && !isDisabled ? "border border-cyan-500/50 text-cyan-400" : ""}
-                        ${isSelected ? "bg-orange-500 text-white font-bold shadow-[0_0_15px_rgba(249,115,22,0.4)] border-transparent" : "border-transparent"}
-                      `}
-                      title={isAlreadyBlocked ? "Ziua este deja blocată!" : ""}
+                      className="text-center text-[10px] font-black text-slate-500 uppercase tracking-widest"
                     >
                       {day}
-                    </button>
-                  );
-                })}
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-7 gap-1.5">
+                  {blanksArray.map((_, i) => (
+                    <div key={`blank-${i}`} className="aspect-square"></div>
+                  ))}
+
+                  {daysArray.map((day) => {
+                    const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+                    const cellDate = new Date(viewYear, viewMonth, day);
+
+                    const isPast = cellDate < today;
+                    const isAlreadyBlocked = blockedDays.includes(dateStr);
+                    const isDisabled = isPast || isAlreadyBlocked;
+                    const isSelected = leaveDate === dateStr;
+
+                    return (
+                      <button
+                        key={day}
+                        disabled={isDisabled}
+                        onClick={() => setLeaveDate(dateStr)}
+                        className={`aspect-square flex items-center justify-center rounded-lg text-sm font-bold transition-all border
+                          ${isPast ? "text-slate-700 cursor-not-allowed opacity-50 border-transparent" : ""}
+                          ${isAlreadyBlocked ? "bg-red-500/10 text-red-500/50 line-through border-red-500/20 cursor-not-allowed" : ""}
+                          ${!isDisabled && !isSelected ? "bg-white/5 border-white/10 hover:bg-orange-500/20 hover:border-orange-500/50 hover:text-orange-400 text-white cursor-pointer shadow-sm" : ""}
+                          ${isSelected ? "bg-orange-500 text-[#000428] font-black shadow-[0_0_15px_rgba(249,115,22,0.5)] border-orange-400 scale-110 z-10" : ""}
+                        `}
+                      >
+                        {day}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
-            <div className="flex gap-3">
+            <div className="flex gap-3 relative z-10">
               <button
                 onClick={() => {
                   setShowLeaveModal(false);
                   setLeaveDate("");
                   setCalendarViewDate(new Date());
                 }}
-                className="cursor-pointer flex-1 bg-white/5 hover:bg-white/10 text-white font-bold py-3 rounded-xl transition-all"
+                className="cursor-pointer flex-1 bg-white/5 border border-white/10 hover:bg-white/10 text-white text-sm font-bold py-3.5 rounded-xl transition-all shadow-sm"
               >
-                Renunță
+                Înapoi
               </button>
               <button
-                onClick={handleTakeLeave}
+                onClick={triggerTakeLeave}
                 disabled={!leaveDate}
-                className={`cursor-pointer flex-1 font-bold py-3 rounded-xl transition-all ${leaveDate ? "bg-orange-500 hover:bg-orange-400 text-white shadow-[0_0_15px_rgba(249,115,22,0.3)]" : "bg-orange-500/30 text-white/30 cursor-not-allowed"}`}
+                className={`cursor-pointer flex-1 text-sm font-black py-3.5 rounded-xl transition-all ${leaveDate ? "bg-orange-500 hover:bg-orange-400 text-[#0a0a0a] shadow-[0_0_15px_rgba(249,115,22,0.4)]" : "bg-orange-500/20 text-orange-500/50 cursor-not-allowed"}`}
               >
                 Blochează
               </button>

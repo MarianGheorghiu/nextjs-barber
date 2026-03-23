@@ -22,6 +22,24 @@ export default function BarberClientsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [barberId, setBarberId] = useState<string | null>(null);
 
+  // ================= MODAL STATES =================
+  const [activeModal, setActiveModal] = useState<"none" | "alert" | "confirm">(
+    "none",
+  );
+  const [modalConfig, setModalConfig] = useState({
+    title: "",
+    message: "",
+    type: "info",
+  });
+  const [confirmConfig, setConfirmConfig] = useState({
+    title: "",
+    message: "",
+    buttonText: "",
+    buttonColor: "red",
+    action: async () => {},
+  });
+  const [isProcessing, setIsProcessing] = useState(false);
+
   useEffect(() => {
     fetchClients();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -39,7 +57,6 @@ export default function BarberClientsPage() {
     }
     setBarberId(user.id);
 
-    // Citim din tabelul permanent de agendă!
     const { data, error } = await supabase
       .from("barber_clients")
       .select("*")
@@ -50,37 +67,65 @@ export default function BarberClientsPage() {
     setLoading(false);
   };
 
+  const showAlert = (
+    title: string,
+    message: string,
+    type: "success" | "error" | "info" = "info",
+  ) => {
+    setModalConfig({ title, message, type });
+    setActiveModal("alert");
+  };
+
   const handleToggleStatus = async (id: string, currentStatus: string) => {
+    const newStatus = currentStatus === "active" ? "blocked" : "active";
+    const actionText = newStatus === "blocked" ? "blocat" : "deblocat";
+
+    setIsProcessing(true);
     const result = await toggleClientStatusAction(id, currentStatus);
+    setIsProcessing(false);
+
     if (result.success) {
       setClients(
-        clients.map((c) =>
-          c.id === id
-            ? {
-                ...c,
-                status: currentStatus === "active" ? "blocked" : "active",
-              }
-            : c,
-        ),
+        clients.map((c) => (c.id === id ? { ...c, status: newStatus } : c)),
+      );
+      showAlert(
+        "Succes",
+        `Clientul a fost ${actionText} cu succes.`,
+        "success",
       );
     } else {
-      alert("Eroare la modificare status: " + result.error);
+      showAlert(
+        "Eroare",
+        result.error || "A apărut o problemă la modificarea statusului.",
+        "error",
+      );
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (
-      window.confirm(
-        "Ștergi definitiv acest client din agendă? (Nu îi va afecta programările curente)",
-      )
-    ) {
-      const result = await deleteClientAction(id);
-      if (result.success) {
-        setClients(clients.filter((c) => c.id !== id));
-      } else {
-        alert("Eroare la ștergere: " + result.error);
-      }
-    }
+  const handleDelete = (id: string, clientName: string) => {
+    setConfirmConfig({
+      title: "Ștergere Client",
+      message: `Ești sigur că vrei să ștergi definitiv clientul "${clientName}" din agendă? Nu îi va afecta programările curente.`,
+      buttonText: "Șterge Definitiv",
+      buttonColor: "red",
+      action: async () => {
+        setIsProcessing(true);
+        const result = await deleteClientAction(id);
+        setIsProcessing(false);
+        if (result.success) {
+          setClients(clients.filter((c) => c.id !== id));
+          setActiveModal("none");
+        } else {
+          setActiveModal("none");
+          showAlert(
+            "Eroare la ștergere",
+            result.error || "Clientul nu a putut fi șters din sistem.",
+            "error",
+          );
+        }
+      },
+    });
+    setActiveModal("confirm");
   };
 
   // Logica de Căutare (Filtrare instantanee)
@@ -98,158 +143,279 @@ export default function BarberClientsPage() {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-[80vh]">
-        <div className="w-12 h-12 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p className="text-cyan-400 font-medium animate-pulse">
-          Se încarcă agenda permanentă...
+        <div className="w-10 h-10 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin mb-4 shadow-[0_0_15px_rgba(34,211,238,0.5)]"></div>
+        <p className="text-cyan-400 font-bold uppercase tracking-widest text-[10px] animate-pulse">
+          Se citește agenda de clienți...
         </p>
       </div>
     );
   }
 
   return (
-    <div className="animate-fade-in max-w-6xl mx-auto pb-10">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+    <div className="animate-fade-in max-w-6xl mx-auto pb-10 relative">
+      {/* HEADER */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 mb-10">
         <div>
-          <h1 className="text-3xl font-bold text-white mb-2">Clienții Mei</h1>
-          <p className="text-slate-400">
+          <h1 className="text-3xl sm:text-4xl font-black text-white mb-2 tracking-tight">
+            Clienții Mei
+          </h1>
+          <p className="text-slate-400 text-sm font-medium">
             Agenda ta permanentă. Clienții apar aici automat când le confirmi o
             programare.
           </p>
         </div>
       </div>
 
-      {/* 3 Panouri Statistici */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        <div className="bg-white/5 border border-white/10 p-5 rounded-2xl relative overflow-hidden">
-          <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">
-            Total Clienți În Agendă
-          </p>
-          <p className="text-3xl font-bold text-white">{totalClients}</p>
+      {/* 3 PANOURI STATISTICI LIQUID GLASS */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
+        {/* Panou Total */}
+        <div className="bg-white/5 backdrop-blur-xl border border-white/20 p-6 rounded-[2rem] relative overflow-hidden group shadow-xl flex flex-col justify-center">
+          <div className="absolute -right-6 -top-6 w-32 h-32 bg-cyan-500/10 rounded-full blur-[40px] pointer-events-none group-hover:bg-cyan-500/20 transition-all"></div>
+          <div className="relative z-10 flex justify-between items-start mb-2">
+            <h3 className="text-cyan-400/90 text-[10px] font-black uppercase tracking-widest">
+              Total Agendă
+            </h3>
+            <div className="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20 text-cyan-400 shadow-inner">
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2.5"
+                  d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
+                />
+              </svg>
+            </div>
+          </div>
+          <div className="flex items-end gap-3 relative z-10">
+            <span className="text-5xl font-black text-white leading-none">
+              {totalClients}
+            </span>
+            <span className="text-slate-400 text-sm font-medium mb-1">
+              clienți înregistrați
+            </span>
+          </div>
         </div>
 
-        <div className="bg-green-500/5 border border-green-500/20 p-5 rounded-2xl relative overflow-hidden">
-          <div className="absolute -right-4 -top-4 w-16 h-16 bg-green-500/10 rounded-full blur-xl"></div>
-          <p className="text-green-400/80 text-xs font-bold uppercase tracking-wider mb-1 relative z-10">
-            Clienți Activi
-          </p>
-          <p className="text-3xl font-bold text-green-400 relative z-10">
-            {activeClients}
-          </p>
+        {/* Panou Activi */}
+        <div className="bg-white/5 backdrop-blur-xl border border-white/20 p-6 rounded-[2rem] relative overflow-hidden group shadow-xl flex flex-col justify-center">
+          <div className="absolute -right-6 -top-6 w-32 h-32 bg-green-500/10 rounded-full blur-[40px] pointer-events-none group-hover:bg-green-500/20 transition-all"></div>
+          <div className="relative z-10 flex justify-between items-start mb-2">
+            <h3 className="text-green-400/90 text-[10px] font-black uppercase tracking-widest">
+              Clienți Activi
+            </h3>
+            <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center border border-green-500/20 text-green-400 shadow-inner">
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2.5"
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+            </div>
+          </div>
+          <div className="flex items-end gap-3 relative z-10">
+            <span className="text-5xl font-black text-green-400 leading-none">
+              {activeClients}
+            </span>
+            <span className="text-slate-400 text-sm font-medium mb-1">
+              cu acces la rezervări
+            </span>
+          </div>
         </div>
 
-        <div className="bg-red-500/5 border border-red-500/20 p-5 rounded-2xl relative overflow-hidden">
-          <div className="absolute -right-4 -top-4 w-16 h-16 bg-red-500/10 rounded-full blur-xl"></div>
-          <p className="text-red-400/80 text-xs font-bold uppercase tracking-wider mb-1 relative z-10">
-            Clienți Blocați
-          </p>
-          <p className="text-3xl font-bold text-red-400 relative z-10">
-            {blockedClients}
-          </p>
+        {/* Panou Blocați */}
+        <div className="bg-white/5 backdrop-blur-xl border border-white/20 p-6 rounded-[2rem] relative overflow-hidden group shadow-xl flex flex-col justify-center">
+          <div className="absolute -right-6 -top-6 w-32 h-32 bg-red-500/10 rounded-full blur-[40px] pointer-events-none group-hover:bg-red-500/20 transition-all"></div>
+          <div className="relative z-10 flex justify-between items-start mb-2">
+            <h3 className="text-red-400/90 text-[10px] font-black uppercase tracking-widest">
+              Clienți Blocați (Banned)
+            </h3>
+            <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center border border-red-500/20 text-red-400 shadow-inner">
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2.5"
+                  d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"
+                />
+              </svg>
+            </div>
+          </div>
+          <div className="flex items-end gap-3 relative z-10">
+            <span className="text-5xl font-black text-red-400 leading-none">
+              {blockedClients}
+            </span>
+            <span className="text-slate-400 text-sm font-medium mb-1">
+              interziși pe platformă
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Bară de Căutare */}
-      <div className="mb-6 relative">
-        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-500">
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+      {/* CONTAINER TABEL LIQUID GLASS PREMIUM */}
+      <div className="bg-white/5 backdrop-blur-2xl border border-white/20 rounded-[2.5rem] p-6 sm:p-8 shadow-2xl relative flex flex-col overflow-hidden">
+        {/* Glow luminos fundal container tabel */}
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-500/40 via-purple-500/40 to-cyan-500/40"></div>
+        <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/10 rounded-full blur-[100px] pointer-events-none"></div>
+
+        {/* SEARCH BAR & TITLU */}
+        <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 relative z-10 shrink-0">
+          <h3 className="text-xl font-black text-white flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20 text-cyan-400 shadow-inner">
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2.5"
+                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                />
+              </svg>
+            </div>
+            Registru Clienți
+          </h3>
+          <div className="relative w-full sm:w-80">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+              <svg
+                className="w-5 h-5 text-cyan-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+              </svg>
+            </div>
+            <input
+              type="text"
+              placeholder="Caută client sau număr..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-black/40 border border-white/10 focus:border-cyan-400 rounded-2xl pl-11 pr-4 py-3.5 text-white outline-none transition-all shadow-inner placeholder:text-slate-500 font-medium text-sm"
             />
-          </svg>
+          </div>
         </div>
-        <input
-          type="text"
-          placeholder="Caută după nume sau număr de telefon..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full bg-black/40 backdrop-blur-md border border-white/10 focus:border-cyan-400 rounded-2xl pl-12 pr-4 py-4 text-white outline-none transition-all shadow-[0_0_15px_rgba(0,0,0,0.2)] placeholder:text-slate-500"
-        />
-      </div>
 
-      {/* Tabel Clienți */}
-      <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-6 sm:p-8">
         {clients.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-slate-400 font-medium text-lg mb-2">
-              Agenda este goală.
+          <div className="text-center py-16 relative z-10">
+            <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4 border border-white/10 text-slate-500 shadow-inner">
+              <svg
+                className="w-8 h-8"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
+                />
+              </svg>
+            </div>
+            <p className="text-white font-black text-2xl tracking-tight mb-2">
+              Agenda ta este goală.
             </p>
-            <p className="text-sm text-slate-500">
-              Du-te în Calendar și apasă "Confirmă" pe o programare, iar
-              clientul va fi salvat automat aici!
+            <p className="text-sm text-slate-400 font-medium">
+              Apasă pe butonul "Confirmă" de la prima ta programare, iar datele
+              clientului vor fi salvate automat aici pentru viitor.
             </p>
           </div>
         ) : filteredClients.length === 0 ? (
-          <div className="text-center py-12 text-slate-400 font-medium italic">
-            Nu s-a găsit niciun client cu acest nume/număr.
+          <div className="text-center py-12 text-slate-400 font-medium italic relative z-10">
+            Nu a fost găsit niciun client conform căutării.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[600px]">
-              <thead>
-                <tr className="text-slate-400 border-b border-white/10 text-xs uppercase tracking-wider">
-                  <th className="pb-4 font-medium pl-2">Nume Client</th>
-                  <th className="pb-4 font-medium">Telefon</th>
-                  <th className="pb-4 font-medium text-center">Status</th>
-                  <th className="pb-4 font-medium text-right pr-2">Acțiuni</th>
+          <div className="overflow-auto custom-scrollbar max-h-[600px] rounded-2xl border border-white/10 bg-black/20 relative z-10 shadow-inner">
+            <table className="w-full text-left border-collapse min-w-[700px]">
+              <thead className="sticky top-0 z-20 bg-[#050505]/95 backdrop-blur-xl border-b border-white/20 shadow-sm">
+                <tr className="text-slate-300 text-[10px] uppercase tracking-widest font-black">
+                  <th className="py-4 pl-6">Nume Client</th>
+                  <th className="py-4">Telefon Contact</th>
+                  <th className="py-4 text-center">Status Cont</th>
+                  <th className="py-4 text-right pr-6">Acțiuni Operative</th>
                 </tr>
               </thead>
-              <tbody className="text-slate-300">
+              <tbody className="text-white text-base">
                 {filteredClients.map((client) => {
                   const isActive = client.status === "active";
 
                   return (
                     <tr
                       key={client.id}
-                      className={`border-b border-white/5 transition-colors group ${!isActive ? "opacity-60 hover:opacity-100" : "hover:bg-white/5"}`}
+                      className={`border-b border-white/5 transition-colors group ${!isActive ? "bg-red-500/[0.02] hover:bg-red-500/[0.05]" : "hover:bg-white/5"}`}
                     >
                       {/* Nume */}
-                      <td className="py-4 pl-2 align-middle">
-                        <p
-                          className={`font-bold text-base ${isActive ? "text-white" : "text-slate-400 line-through decoration-red-500/50 decoration-2"}`}
-                        >
-                          {client.name}
-                        </p>
+                      <td className="py-6 pl-6 align-middle">
+                        <div className="flex items-center gap-4">
+                          <div
+                            className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg border shrink-0 shadow-inner ${isActive ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/30" : "bg-red-500/10 text-red-400 border-red-500/30"}`}
+                          >
+                            {client.name
+                              ? client.name.charAt(0).toUpperCase()
+                              : "?"}
+                          </div>
+                          <p
+                            className={`font-black text-lg tracking-tight ${!isActive ? "text-red-400" : "text-white"}`}
+                          >
+                            {client.name}
+                          </p>
+                        </div>
                       </td>
 
                       {/* Telefon */}
-                      <td className="py-4 align-middle font-mono text-cyan-400 text-sm">
+                      <td className="py-6 align-middle font-mono font-bold text-cyan-400">
                         {client.phone || "Lipsă"}
                       </td>
 
                       {/* Status */}
-                      <td className="py-4 text-center align-middle">
+                      <td className="py-6 text-center align-middle">
                         {isActive ? (
-                          <span className="px-3 py-1 rounded-md bg-green-500/10 text-green-400 border border-green-500/20 text-xs font-bold">
+                          <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-green-500/10 text-green-400 border border-green-500/30 text-[10px] font-black uppercase tracking-wider shadow-sm">
+                            <span className="w-1.5 h-1.5 rounded-full bg-green-400 shadow-[0_0_8px_rgba(34,197,94,0.8)]"></span>
                             Activ
                           </span>
                         ) : (
-                          <span className="px-3 py-1 rounded-md bg-red-500/10 text-red-400 border border-red-500/20 text-xs font-bold">
-                            Blocat
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 text-red-400 border border-red-500/30 text-[10px] font-black uppercase tracking-wider shadow-[0_0_10px_rgba(239,68,68,0.1)]">
+                            <span className="text-[11px] leading-none">🚫</span>{" "}
+                            Interzis
                           </span>
                         )}
                       </td>
 
                       {/* Acțiuni */}
-                      <td className="py-4 text-right pr-2 align-middle">
-                        <div className="flex justify-end gap-2">
+                      <td className="py-6 text-right pr-6 align-middle">
+                        <div className="flex justify-end gap-2.5 items-center">
                           <button
                             onClick={() =>
                               handleToggleStatus(client.id, client.status)
                             }
-                            className={`cursor-pointer px-3 py-1.5 rounded-lg border transition-all text-xs font-bold flex items-center gap-1.5 ${
-                              isActive
-                                ? "bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border-orange-500/30"
-                                : "bg-green-500/10 hover:bg-green-500/20 text-green-400 border-green-500/30"
-                            }`}
+                            disabled={isProcessing}
+                            className={`cursor-pointer px-5 py-2.5 rounded-xl transition-all text-xs font-black flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 border ${isActive ? "bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border-orange-500/30 hover:border-orange-500/50" : "bg-green-500/10 hover:bg-green-500/20 text-green-400 border-green-500/30 hover:border-green-500/50"}`}
                             title={
                               isActive
                                 ? "Blochează Clientul"
@@ -260,7 +426,7 @@ export default function BarberClientsPage() {
                               <>
                                 🚫{" "}
                                 <span className="hidden sm:inline">
-                                  Blochează
+                                  Ban/Block
                                 </span>
                               </>
                             ) : (
@@ -274,12 +440,13 @@ export default function BarberClientsPage() {
                           </button>
 
                           <button
-                            onClick={() => handleDelete(client.id)}
-                            className="cursor-pointer px-3 py-1.5 rounded-lg bg-white/5 hover:bg-red-500/10 text-slate-400 hover:text-red-400 border border-transparent hover:border-red-500/30 transition-all text-xs font-bold flex items-center gap-1"
+                            onClick={() => handleDelete(client.id, client.name)}
+                            disabled={isProcessing}
+                            className="cursor-pointer w-10 h-10 rounded-xl bg-white/5 hover:bg-red-500/20 text-slate-400 hover:text-red-400 border border-white/10 hover:border-red-500/30 transition-all flex items-center justify-center shadow-sm disabled:opacity-50"
                             title="Șterge din agendă"
                           >
                             <svg
-                              className="w-4 h-4"
+                              className="w-5 h-5"
                               fill="none"
                               stroke="currentColor"
                               viewBox="0 0 24 24"
@@ -287,7 +454,7 @@ export default function BarberClientsPage() {
                               <path
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
-                                strokeWidth="2"
+                                strokeWidth="2.5"
                                 d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
                               />
                             </svg>
@@ -302,6 +469,131 @@ export default function BarberClientsPage() {
           </div>
         )}
       </div>
+
+      {/* ================= MODALE CENTRALE ================= */}
+
+      {/* Modal Alertă (Success/Error) */}
+      {activeModal === "alert" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+          <div
+            className={`w-full max-w-sm bg-[#050505]/95 backdrop-blur-2xl border p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden ${modalConfig.type === "error" ? "border-red-500/30" : modalConfig.type === "success" ? "border-green-500/30" : "border-cyan-500/30"}`}
+          >
+            <div className="absolute top-0 left-0 w-full h-1 bg-white/10"></div>
+            <div
+              className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 border-4 shadow-inner relative z-10 ${modalConfig.type === "error" ? "bg-red-500/10 border-red-500/20 text-red-400" : modalConfig.type === "success" ? "bg-green-500/10 border-green-500/20 text-green-400" : "bg-cyan-500/10 border-cyan-500/20 text-cyan-400"}`}
+            >
+              {modalConfig.type === "error" && (
+                <svg
+                  className="w-8 h-8"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2.5"
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                  />
+                </svg>
+              )}
+              {modalConfig.type === "success" && (
+                <svg
+                  className="w-8 h-8"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2.5"
+                    d="M5 13l4 4L19 7"
+                  />
+                </svg>
+              )}
+              {modalConfig.type === "info" && (
+                <svg
+                  className="w-8 h-8"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2.5"
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              )}
+            </div>
+            <h2 className="text-xl font-black text-white mb-2 text-center tracking-tight relative z-10">
+              {modalConfig.title}
+            </h2>
+            <p className="text-slate-300 text-sm mb-8 text-center font-medium leading-relaxed relative z-10">
+              {modalConfig.message}
+            </p>
+            <button
+              onClick={() => setActiveModal("none")}
+              className={`w-full py-3.5 rounded-xl font-black transition-all cursor-pointer shadow-lg relative z-10 text-[#0a0a0a] ${modalConfig.type === "error" ? "bg-red-500 hover:bg-red-400" : modalConfig.type === "success" ? "bg-green-500 hover:bg-green-400" : "bg-cyan-500 hover:bg-cyan-400"}`}
+            >
+              Am înțeles
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Confirmare Ștergere */}
+      {activeModal === "confirm" && (
+        <div
+          className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in`}
+        >
+          <div
+            className={`w-full max-w-sm bg-[#050505]/95 backdrop-blur-2xl border p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden ${confirmConfig.buttonColor === "red" ? "border-red-500/30" : "border-cyan-500/30"}`}
+          >
+            <div className="absolute top-0 left-0 w-full h-1 bg-white/10"></div>
+            <div
+              className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 border-4 shadow-inner relative z-10 ${confirmConfig.buttonColor === "red" ? "bg-red-500/10 border-red-500/20 text-red-400" : "bg-cyan-500/10 border-cyan-500/20 text-cyan-400"}`}
+            >
+              <svg
+                className="w-8 h-8"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2.5"
+                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                />
+              </svg>
+            </div>
+            <h2 className="text-xl font-black text-white mb-2 text-center tracking-tight relative z-10">
+              {confirmConfig.title}
+            </h2>
+            <p className="text-slate-300 text-sm mb-8 text-center font-medium leading-relaxed relative z-10">
+              {confirmConfig.message}
+            </p>
+            <div className="flex gap-3 relative z-10">
+              <button
+                onClick={() => setActiveModal("none")}
+                className="flex-1 py-3.5 rounded-xl bg-white/5 border border-white/10 text-slate-300 text-sm font-bold hover:bg-white/10 transition-all cursor-pointer shadow-sm"
+              >
+                Renunță
+              </button>
+              <button
+                onClick={confirmConfig.action}
+                disabled={isProcessing}
+                className={`flex-1 py-3.5 rounded-xl text-[#0a0a0a] text-sm font-black transition-all cursor-pointer disabled:opacity-50 shadow-lg ${confirmConfig.buttonColor === "red" ? "bg-red-500 hover:bg-red-400 shadow-[0_0_15px_rgba(239,68,68,0.4)]" : "bg-cyan-500 hover:bg-cyan-400"}`}
+              >
+                {isProcessing ? "..." : confirmConfig.buttonText}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
