@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense, useRef } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense } from "react";
 
 import {
   getAvailableBarbersAction,
@@ -40,6 +39,10 @@ function ClientPageContent() {
   // State Programare Activă
   const [activeAppointment, setActiveAppointment] = useState<any>(null);
 
+  // State Alertă Anulare de către Frizer
+  const [barberCancelledAlert, setBarberCancelledAlert] = useState(false);
+  const isClientCancelling = useRef(false); // Memorează dacă clientul a apăsat butonul de anulare
+
   // Flow State
   const [barbers, setBarbers] = useState<any[]>([]);
   const [selectedBarber, setSelectedBarber] = useState<any>(null);
@@ -66,6 +69,45 @@ function ClientPageContent() {
     initPage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ================= REALTIME SYNC =================
+  useEffect(() => {
+    if (!clientId) return;
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel("realtime-client-active-booking")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "appointments" },
+        () => {
+          refreshActiveAppointment();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [clientId]);
+
+  const refreshActiveAppointment = async () => {
+    const activeResult = await getClientActiveAppointmentAction(clientId);
+    if (activeResult.success && activeResult.appointment) {
+      setActiveAppointment(activeResult.appointment);
+    } else {
+      // Dacă aveam o programare activă și a dispărut (și nu clientul a anulat-o) -> Frizerul a anulat!
+      // Am adăugat ": any" aici pentru a scăpa de eroarea TypeScript
+      setActiveAppointment((prev: any) => {
+        if (prev && !isClientCancelling.current) {
+          setBarberCancelledAlert(true);
+        } else {
+          setStep(1);
+        }
+        return null;
+      });
+    }
+  };
 
   const initPage = async () => {
     setLoading(true);
@@ -180,7 +222,7 @@ function ClientPageContent() {
     setIsSubmitting(false);
   };
 
-  // --- ACȚIUNI MODAL (FĂRĂ ALERTE NATIVE) ---
+  // --- ACȚIUNI MODAL ---
   const triggerCancelModal = () => {
     setModalMessage(
       "Ești sigur că vrei să anulezi programarea? Locul tău va fi eliberat imediat.",
@@ -191,11 +233,15 @@ function ClientPageContent() {
   const confirmCancelAppointment = async () => {
     setLoading(true);
     setActiveModal("none");
+    isClientCancelling.current = true; // Spunem aplicației că noi am anulat intenționat
     const result = await cancelClientAppointmentAction(activeAppointment.id);
+
     if (result.success) {
       setActiveAppointment(null);
+      setBarberCancelledAlert(false);
       await initPage();
     }
+    isClientCancelling.current = false; // Resetăm scutul
   };
 
   const handleAcceptReschedule = async () => {
@@ -215,7 +261,6 @@ function ClientPageContent() {
     }
   };
 
-  // Calendar Engine
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const viewYear = calendarViewDate.getFullYear();
@@ -247,6 +292,53 @@ function ClientPageContent() {
       </div>
     );
 
+  // ================= ECRAN AVERTIZARE: ANULAT DE FRIZER =================
+  if (barberCancelledAlert) {
+    return (
+      <div className="animate-fade-in max-w-2xl mx-auto pb-10 mt-10 relative">
+        <div className="bg-[#0a0500]/80 backdrop-blur-2xl border border-red-500/30 p-8 sm:p-12 rounded-[3rem] shadow-2xl relative overflow-hidden text-center">
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-500/50 to-transparent"></div>
+          <div className="absolute top-0 right-0 w-64 h-64 bg-red-500/10 rounded-full blur-[100px] pointer-events-none"></div>
+
+          <div className="w-20 h-20 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-6 border-4 border-red-500/20 text-red-400 shadow-inner relative z-10">
+            <svg
+              className="w-10 h-10"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2.5"
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </div>
+
+          <h2 className="text-3xl sm:text-4xl font-black text-white mb-4 tracking-tight relative z-10">
+            Programare Anulată
+          </h2>
+          <p className="text-slate-300 text-base sm:text-lg mb-10 leading-relaxed font-medium relative z-10">
+            Ne pare rău, dar frizerul a fost nevoit să îți anuleze programarea
+            din motive obiective (program decalat sau o urgență). Te rugăm să
+            alegi un alt interval disponibil.
+          </p>
+
+          <button
+            onClick={() => {
+              setBarberCancelledAlert(false);
+              setStep(1);
+            }}
+            className="cursor-pointer w-full sm:w-auto bg-red-500 hover:bg-red-400 text-[#0a0a0a] font-black px-10 py-4 rounded-2xl transition-all shadow-[0_0_25px_rgba(239,68,68,0.4)] hover:scale-105 relative z-10"
+          >
+            Fă o nouă programare
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // ================= ECRAN 1: PROGRAMARE ACTIVĂ =================
   if (activeAppointment) {
     const isPending = activeAppointment.status === "pending";
@@ -266,48 +358,57 @@ function ClientPageContent() {
     });
 
     return (
-      <div className="animate-fade-in max-w-4xl mx-auto pb-10">
+      <div className="animate-fade-in max-w-4xl mx-auto pb-10 relative">
         <div className="mb-10 text-center sm:text-left">
-          <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">
+          <h1 className="text-3xl sm:text-4xl font-black text-white mb-2 tracking-tight flex items-center justify-center sm:justify-start gap-3">
             Programarea Ta
+            <span className="flex items-center gap-1.5 ml-2 text-[10px] text-green-400 uppercase tracking-widest font-bold bg-green-500/10 px-3 py-1.5 rounded-full border border-green-500/20">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>{" "}
+              Live Sync
+            </span>
           </h1>
-          <p className="text-slate-400">Detaliile următoarei tale vizite.</p>
+          <p className="text-slate-400 font-medium">
+            Detaliile următoarei tale vizite. Orice modificare făcută de salon
+            se va actualiza automat aici.
+          </p>
         </div>
 
         {isRescheduled && (
-          <div className="mb-8 bg-orange-500/10 backdrop-blur-md border border-orange-500/30 p-6 sm:p-8 rounded-[2rem] flex flex-col sm:flex-row items-center justify-between gap-6 animate-bounce-subtle shadow-[0_0_30px_rgba(249,115,22,0.15)] relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/20 rounded-full blur-[40px] pointer-events-none"></div>
+          <div className="mb-8 bg-[#0a0500]/60 backdrop-blur-2xl border border-orange-500/30 p-6 sm:p-10 rounded-[3rem] flex flex-col sm:flex-row items-center justify-between gap-8 animate-bounce-subtle shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-48 h-48 bg-orange-500/20 rounded-full blur-[60px] pointer-events-none"></div>
             <div className="relative z-10 text-center sm:text-left">
-              <p className="text-orange-400 font-black text-xl mb-1 flex items-center justify-center sm:justify-start gap-2">
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
+              <div className="text-orange-400 font-black text-2xl mb-1 flex items-center justify-center sm:justify-start gap-2 tracking-tight">
+                <span className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center border border-orange-500/30 text-orange-400 shadow-inner">
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2.5"
+                      d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                </span>
                 Frizerul a propus o nouă oră!
-              </p>
-              <p className="text-sm text-orange-400/80 font-medium">
-                Ești de acord cu noua dată/oră de mai jos?
+              </div>
+              <p className="text-sm text-orange-400/80 font-bold sm:ml-12">
+                Ești de acord cu noua dată propusă?
               </p>
             </div>
-            <div className="flex w-full sm:w-auto items-center gap-3 relative z-10">
+            <div className="flex w-full sm:w-auto items-center gap-4 relative z-10">
               <button
                 onClick={handleAcceptReschedule}
-                className="cursor-pointer flex-1 sm:flex-none bg-orange-500 hover:bg-orange-400 text-white font-black px-8 py-3.5 rounded-xl transition-all shadow-[0_0_20px_rgba(249,115,22,0.4)]"
+                className="cursor-pointer flex-1 sm:flex-none bg-orange-500 hover:bg-orange-400 text-[#0a0a0a] font-black px-10 py-4 rounded-2xl transition-all shadow-[0_0_25px_rgba(249,115,22,0.4)] hover:scale-105"
               >
                 ✓ Accept
               </button>
               <button
                 onClick={triggerCancelModal}
-                className="cursor-pointer flex-1 sm:flex-none bg-white/5 hover:bg-red-500/10 text-slate-300 hover:text-red-400 font-bold px-8 py-3.5 rounded-xl transition-all border border-white/10 hover:border-red-500/30"
+                className="cursor-pointer flex-1 sm:flex-none bg-white/5 hover:bg-red-500/20 text-slate-300 hover:text-red-400 font-bold px-10 py-4 rounded-2xl transition-all border border-white/10 hover:border-red-500/40 shadow-sm"
               >
                 ✕ Refuz
               </button>
@@ -315,22 +416,21 @@ function ClientPageContent() {
           </div>
         )}
 
-        {/* CARD PRINCIPAL LIQUID GLASS */}
         <div
-          className={`bg-white/5 backdrop-blur-2xl border p-8 sm:p-10 relative overflow-hidden shadow-2xl rounded-[3rem] ${isRescheduled ? "border-orange-500/30" : "border-white/20"}`}
+          className={`bg-white/5 backdrop-blur-2xl border p-8 sm:p-12 relative overflow-hidden shadow-2xl rounded-[3rem] ${isRescheduled ? "border-orange-500/40" : "border-white/20"}`}
         >
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-500/50 via-purple-500/50 to-cyan-500/50"></div>
           <div
             className={`absolute top-0 right-0 w-64 h-64 rounded-full blur-[100px] pointer-events-none ${isRescheduled ? "bg-orange-500/10" : "bg-cyan-500/10"}`}
           ></div>
 
-          <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 mb-8 border-b border-white/10 pb-8">
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center text-3xl border border-white/10 shadow-inner shrink-0">
+          <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 mb-10 border-b border-white/10 pb-8">
+            <div className="flex items-center gap-5">
+              <div className="w-16 h-16 bg-cyan-500/10 rounded-2xl flex items-center justify-center text-3xl border border-cyan-500/30 shadow-inner shrink-0">
                 📍
               </div>
               <div>
-                <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-1">
+                <p className="text-[10px] text-cyan-400/80 uppercase tracking-widest font-black mb-1">
                   Locație / Frizer
                 </p>
                 <p className="text-2xl sm:text-3xl font-black text-white tracking-tight">
@@ -340,32 +440,36 @@ function ClientPageContent() {
             </div>
 
             <div
-              className={`px-5 py-2.5 rounded-xl flex items-center gap-2.5 font-bold uppercase tracking-wider text-xs shadow-inner border ${isPending ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/30" : isRescheduled ? "bg-orange-500/10 text-orange-400 border-orange-500/30" : "bg-green-500/10 text-green-400 border-green-500/30"}`}
+              className={`px-6 py-3 rounded-2xl flex items-center gap-3 font-black uppercase tracking-widest text-xs shadow-inner border ${isPending ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/30" : isRescheduled ? "bg-orange-500/10 text-orange-400 border-orange-500/40 shadow-[0_0_20px_rgba(249,115,22,0.15)] scale-105" : "bg-green-500/10 text-green-400 border-green-500/30 shadow-[0_0_20px_rgba(34,197,94,0.15)]"}`}
             >
               {isPending && (
                 <>
-                  <span className="w-2.5 h-2.5 rounded-full bg-yellow-400 animate-pulse"></span>{" "}
+                  <span className="w-2.5 h-2.5 rounded-full bg-yellow-400 animate-pulse shadow-[0_0_10px_rgba(250,204,21,0.8)]"></span>{" "}
                   În așteptare
                 </>
               )}
               {isRescheduled && (
                 <>
-                  <span className="w-2.5 h-2.5 rounded-full bg-orange-400 animate-pulse"></span>{" "}
-                  Reprogramat
+                  <span className="w-2.5 h-2.5 rounded-full bg-orange-400 animate-pulse shadow-[0_0_10px_rgba(249,115,22,0.8)]"></span>{" "}
+                  Ofertă Nouă!
                 </>
               )}
               {isConfirmed && (
                 <>
-                  <span className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.8)]"></span>{" "}
+                  <span className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_15px_rgba(34,197,94,0.9)]"></span>{" "}
                   Confirmat
                 </>
               )}
             </div>
           </div>
 
-          <div className="relative z-10 grid grid-cols-1 sm:grid-cols-2 gap-8 mb-8">
-            <div className="bg-black/20 p-6 rounded-[2rem] border border-white/5 shadow-inner">
-              <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-2">
+          <div className="relative z-10 grid grid-cols-1 sm:grid-cols-2 gap-8 mb-10">
+            <div
+              className={`p-8 rounded-[2.5rem] border shadow-inner ${isRescheduled ? "bg-orange-500/5 border-orange-500/20" : "bg-black/30 border-white/5"}`}
+            >
+              <p
+                className={`text-[10px] uppercase tracking-widest font-black mb-2 ${isRescheduled ? "text-orange-400/80" : "text-slate-400"}`}
+              >
                 Data & Ora
               </p>
               <p
@@ -373,42 +477,48 @@ function ClientPageContent() {
               >
                 {appDate}
               </p>
-              <div className="flex items-center gap-3 mt-3">
-                <svg
-                  className={`w-6 h-6 ${isRescheduled ? "text-orange-500" : "text-cyan-500"}`}
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
+              <div className="flex items-center gap-3 mt-4">
+                <div
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-inner ${isRescheduled ? "bg-orange-500/10 text-orange-500 border border-orange-500/30" : "bg-cyan-500/10 text-cyan-400 border border-cyan-500/30"}`}
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2.5"
+                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                </div>
                 <p
-                  className={`font-mono font-black text-3xl ${isRescheduled ? "text-orange-400" : "text-cyan-400"}`}
+                  className={`font-mono font-black text-4xl tracking-tighter ${isRescheduled ? "text-orange-400" : "text-cyan-400"}`}
                 >
                   {activeAppointment.appointment_time.slice(0, 5)}
                 </p>
               </div>
             </div>
 
-            <div className="bg-black/20 p-6 rounded-[2rem] border border-white/5 shadow-inner flex flex-col justify-center">
-              <p className="text-[10px] text-slate-400 uppercase tracking-widest font-bold mb-2">
+            <div className="bg-black/30 p-8 rounded-[2.5rem] border border-white/5 shadow-inner flex flex-col justify-center">
+              <p className="text-[10px] text-slate-400 uppercase tracking-widest font-black mb-2">
                 Serviciu Ales
               </p>
               <p className="text-2xl font-black text-white tracking-tight">
                 {activeAppointment.service_name}
               </p>
-              <div className="mt-4 p-4 rounded-xl bg-cyan-500/5 border border-cyan-500/10 inline-block">
-                <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">
-                  Plată la final
+              <div className="mt-6 p-5 rounded-2xl bg-cyan-500/5 border border-cyan-500/20 inline-block shadow-inner">
+                <p className="text-cyan-400/60 text-[10px] font-black uppercase tracking-widest mb-1">
+                  Total de Plată în locație
                 </p>
-                <p className="text-cyan-400 font-black text-3xl">
+                <p className="text-cyan-400 font-black text-4xl">
                   {activeAppointment.price}{" "}
-                  <span className="text-base text-cyan-500/70">RON</span>
+                  <span className="text-xl text-cyan-500/70 tracking-widest uppercase">
+                    RON
+                  </span>
                 </p>
               </div>
             </div>
@@ -417,7 +527,7 @@ function ClientPageContent() {
           <div className="relative z-10 pt-8 border-t border-white/10 flex justify-end">
             <button
               onClick={triggerCancelModal}
-              className="cursor-pointer w-full sm:w-auto bg-white/5 hover:bg-red-500/10 text-slate-300 hover:text-red-400 border border-white/10 hover:border-red-500/30 font-bold px-8 py-4 rounded-xl transition-all flex items-center justify-center gap-2 shadow-sm"
+              className="cursor-pointer w-full sm:w-auto bg-white/5 hover:bg-red-500/10 text-slate-300 hover:text-red-400 border border-white/10 hover:border-red-500/30 font-black px-10 py-4 rounded-2xl transition-all flex items-center justify-center gap-3 shadow-sm hover:shadow-[0_0_20px_rgba(239,68,68,0.2)]"
             >
               <svg
                 className="w-5 h-5"
@@ -428,7 +538,7 @@ function ClientPageContent() {
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  strokeWidth="2"
+                  strokeWidth="2.5"
                   d="M6 18L18 6M6 6l12 12"
                 />
               </svg>
@@ -437,20 +547,15 @@ function ClientPageContent() {
           </div>
         </div>
 
-        {isPending && (
-          <p className="text-center text-sm text-cyan-400/70 mt-8 font-medium animate-pulse">
-            Frizerul a fost notificat și va confirma în curând.
-          </p>
-        )}
-
         {/* MODAL CANCEL PREMIUM */}
         {activeModal === "cancel" && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-            <div className="w-full max-w-sm bg-[#050505]/95 backdrop-blur-2xl border border-red-500/30 p-8 rounded-[2rem] shadow-2xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/10 rounded-full blur-[40px] pointer-events-none"></div>
-              <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-6 border-4 border-red-500/20 text-red-400 shadow-inner relative z-10">
+            <div className="w-full max-w-md bg-[#050505]/95 backdrop-blur-2xl border border-red-500/30 p-8 sm:p-10 rounded-[3rem] shadow-2xl relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1 bg-red-500/20"></div>
+              <div className="absolute top-0 right-0 w-48 h-48 bg-red-500/10 rounded-full blur-[60px] pointer-events-none"></div>
+              <div className="w-20 h-20 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-6 border-4 border-red-500/20 text-red-400 shadow-inner relative z-10">
                 <svg
-                  className="w-8 h-8"
+                  className="w-10 h-10"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -463,23 +568,23 @@ function ClientPageContent() {
                   />
                 </svg>
               </div>
-              <h2 className="text-xl font-black text-white mb-3 text-center relative z-10">
+              <h2 className="text-2xl font-black text-white mb-2 text-center tracking-tight relative z-10">
                 Anulare Programare
               </h2>
-              <p className="text-slate-300 text-sm mb-8 text-center leading-relaxed relative z-10">
+              <p className="text-slate-300 text-sm mb-8 text-center font-medium leading-relaxed relative z-10">
                 {modalMessage}
               </p>
 
-              <div className="flex gap-3 relative z-10">
+              <div className="flex gap-4 relative z-10">
                 <button
                   onClick={() => setActiveModal("none")}
-                  className="flex-1 py-3.5 rounded-xl bg-white/5 border border-white/10 text-slate-300 text-sm font-bold hover:bg-white/10 transition-all cursor-pointer shadow-sm"
+                  className="flex-1 py-4 rounded-xl bg-white/5 border border-white/10 text-white font-bold hover:bg-white/10 transition-all cursor-pointer shadow-sm"
                 >
                   Înapoi
                 </button>
                 <button
                   onClick={confirmCancelAppointment}
-                  className="flex-1 py-3.5 rounded-xl bg-red-500 text-[#0a0a0a] text-sm font-black hover:bg-red-400 transition-all cursor-pointer shadow-[0_0_20px_rgba(239,68,68,0.4)]"
+                  className="flex-1 py-4 rounded-xl bg-red-500 text-[#0a0a0a] font-black hover:bg-red-400 transition-all cursor-pointer shadow-[0_0_20px_rgba(239,68,68,0.4)]"
                 >
                   Anulează Acum
                 </button>
@@ -491,26 +596,26 @@ function ClientPageContent() {
     );
   }
 
-  // ================= ECRAN 2: FLUX REZERVARE (LIQUID GLASS UI) =================
+  // ================= ECRAN 2: FLUX REZERVARE =================
   return (
-    <div className="animate-fade-in max-w-4xl mx-auto pb-10">
+    <div className="animate-fade-in max-w-5xl mx-auto pb-10">
       <div className="mb-10 text-center sm:text-left">
         <h1 className="text-3xl sm:text-4xl font-black text-white mb-2 tracking-tight">
           Programează-te
         </h1>
         <p className="text-slate-400 font-medium">
-          Urmează pașii pentru a-ți rezerva locul.
+          Urmează pașii pentru a-ți rezerva locul pe scaun.
         </p>
 
         {/* PROGRESS BAR PREMIUM */}
-        <div className="flex items-center justify-center sm:justify-start gap-3 mt-8">
+        <div className="flex items-center justify-center sm:justify-start gap-4 mt-10">
           {[1, 2, 3, 4].map((i) => (
             <div
               key={i}
-              className="flex flex-col items-center gap-2 flex-1 max-w-[100px]"
+              className="flex flex-col items-center gap-2 flex-1 max-w-[120px]"
             >
               <div
-                className={`w-full h-1.5 rounded-full transition-all duration-500 ${step >= i ? "bg-cyan-500 shadow-[0_0_15px_rgba(34,211,238,0.5)]" : "bg-white/10"}`}
+                className={`w-full h-1.5 rounded-full transition-all duration-500 ${step >= i ? "bg-gradient-to-r from-cyan-400 to-cyan-500 shadow-[0_0_15px_rgba(34,211,238,0.5)]" : "bg-white/10"}`}
               ></div>
               <span
                 className={`text-[10px] font-black uppercase tracking-widest transition-colors duration-500 ${step >= i ? "text-cyan-400" : "text-slate-600"}`}
@@ -525,30 +630,30 @@ function ClientPageContent() {
       {/* STEP 1: Frizerii */}
       {step === 1 && (
         <div className="animate-fade-in">
-          <h2 className="text-2xl font-black text-white mb-6">
+          <h2 className="text-2xl font-black text-white mb-8 tracking-tight">
             Alege Frizeria
           </h2>
           {barbers.length === 0 ? (
-            <div className="text-center py-20 bg-white/5 backdrop-blur-xl rounded-[2.5rem] border border-white/10">
+            <div className="text-center py-20 bg-white/5 backdrop-blur-2xl rounded-[3rem] border border-white/10 shadow-xl">
               <p className="text-slate-400 font-medium text-lg">
-                Niciun frizer disponibil momentan.
+                Niciun salon disponibil momentan.
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {barbers.map((barber) => {
                 const isFav = favorites.includes(barber.id);
                 return (
                   <div
                     key={barber.id}
                     onClick={() => handleSelectBarber(barber)}
-                    className="cursor-pointer bg-white/5 backdrop-blur-xl border border-white/10 hover:border-cyan-500/50 p-6 sm:p-8 rounded-[2.5rem] transition-all group relative overflow-hidden shadow-lg hover:shadow-[0_10px_40px_rgba(34,211,238,0.15)] hover:-translate-y-1"
+                    className="cursor-pointer bg-white/5 backdrop-blur-2xl border border-white/20 hover:border-cyan-500/50 p-8 sm:p-10 rounded-[3rem] transition-all duration-500 group relative overflow-hidden shadow-xl hover:shadow-[0_20px_50px_rgba(34,211,238,0.15)] hover:-translate-y-2"
                   >
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 rounded-full blur-[40px] group-hover:bg-cyan-500/20 transition-all pointer-events-none"></div>
+                    <div className="absolute top-0 right-0 w-48 h-48 bg-cyan-500/10 rounded-full blur-[60px] group-hover:bg-cyan-500/20 transition-all pointer-events-none"></div>
 
                     <button
                       onClick={(e) => toggleFavorite(e, barber.id)}
-                      className={`absolute top-6 right-6 z-20 cursor-pointer transition-transform hover:scale-110 p-2 rounded-xl bg-black/20 backdrop-blur-md border border-white/5 shadow-sm ${isFav ? "text-red-500 shadow-[0_0_15px_rgba(239,68,68,0.2)]" : "text-slate-400 hover:text-white"}`}
+                      className={`absolute top-8 right-8 z-20 cursor-pointer transition-transform hover:scale-110 p-3 rounded-2xl bg-black/30 backdrop-blur-xl border border-white/10 shadow-inner ${isFav ? "text-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)] border-red-500/30" : "text-slate-400 hover:text-white hover:border-white/30"}`}
                     >
                       {isFav ? (
                         <svg
@@ -568,22 +673,22 @@ function ClientPageContent() {
                           <path
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            strokeWidth="2"
+                            strokeWidth="2.5"
                             d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
                           />
                         </svg>
                       )}
                     </button>
 
-                    <div className="flex items-center gap-5 relative z-10">
-                      <div className="w-16 h-16 bg-cyan-500/10 rounded-2xl flex items-center justify-center text-3xl group-hover:scale-110 transition-transform border border-cyan-500/20 shrink-0 shadow-inner">
+                    <div className="flex items-center gap-6 relative z-10">
+                      <div className="w-20 h-20 bg-cyan-500/10 rounded-3xl flex items-center justify-center text-4xl group-hover:scale-110 transition-transform duration-500 border border-cyan-500/30 shrink-0 shadow-inner">
                         ✂️
                       </div>
                       <div>
-                        <h3 className="text-xl font-black text-white mb-1 group-hover:text-cyan-400 transition-colors">
+                        <h3 className="text-2xl font-black text-white mb-1.5 tracking-tight group-hover:text-cyan-400 transition-colors">
                           {barber.barbershop_name || "Salon Fără Nume"}
                         </h3>
-                        <p className="text-sm text-slate-400 font-medium">
+                        <p className="text-sm text-slate-400 font-bold uppercase tracking-widest">
                           Frizer:{" "}
                           <span className="text-white">
                             {barber.first_name} {barber.last_name}
@@ -604,7 +709,7 @@ function ClientPageContent() {
         <div className="animate-fade-in">
           <button
             onClick={() => setStep(1)}
-            className="cursor-pointer text-slate-400 hover:text-cyan-400 text-sm font-black uppercase tracking-wider mb-8 flex items-center gap-2 transition-colors w-max px-4 py-2 rounded-lg hover:bg-white/5"
+            className="cursor-pointer text-slate-400 hover:text-cyan-400 text-[10px] font-black uppercase tracking-widest mb-8 flex items-center gap-2 transition-colors w-max px-4 py-2.5 rounded-xl hover:bg-white/5 border border-transparent hover:border-white/10 shadow-sm"
           >
             <svg
               className="w-4 h-4"
@@ -622,11 +727,11 @@ function ClientPageContent() {
             Înapoi la Locații
           </button>
 
-          <h2 className="text-2xl font-black text-white mb-6">
+          <h2 className="text-2xl font-black text-white mb-8 tracking-tight">
             Alege Serviciul
           </h2>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
             {services.map((service) => (
               <div
                 key={service.id}
@@ -634,16 +739,16 @@ function ClientPageContent() {
                   setSelectedService(service);
                   setStep(3);
                 }}
-                className="cursor-pointer bg-white/5 backdrop-blur-xl border border-white/10 hover:border-cyan-500/50 p-6 rounded-[2rem] transition-all flex justify-between items-center group shadow-lg hover:shadow-[0_10px_30px_rgba(34,211,238,0.15)] relative overflow-hidden"
+                className="cursor-pointer bg-white/5 backdrop-blur-2xl border border-white/20 hover:border-cyan-500/50 p-8 rounded-[2.5rem] transition-all duration-500 flex justify-between items-center group shadow-xl hover:shadow-[0_15px_40px_rgba(34,211,238,0.15)] relative overflow-hidden hover:-translate-y-1"
               >
-                <div className="absolute top-0 right-0 w-24 h-24 bg-cyan-500/10 rounded-full blur-[30px] opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                <div className="relative z-10">
-                  <h3 className="text-lg text-white font-black group-hover:text-cyan-400 transition-colors">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/10 rounded-full blur-[40px] opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                <div className="relative z-10 pr-4">
+                  <h3 className="text-xl text-white font-black group-hover:text-cyan-400 transition-colors tracking-tight mb-2">
                     {service.name}
                   </h3>
-                  <p className="text-xs font-bold text-slate-500 mt-2 uppercase tracking-widest flex items-center gap-1.5">
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
                     <svg
-                      className="w-4 h-4"
+                      className="w-4 h-4 text-cyan-500/50"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -655,14 +760,14 @@ function ClientPageContent() {
                         d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
                       />
                     </svg>
-                    Durează ~45 min
+                    Durează ~{service.duration} min
                   </p>
                 </div>
-                <div className="text-right relative z-10 bg-black/30 px-4 py-2 rounded-xl border border-white/5 group-hover:border-cyan-500/30 transition-colors">
-                  <span className="text-cyan-400 font-black text-2xl">
+                <div className="text-right relative z-10 bg-black/40 px-5 py-3 rounded-2xl border border-white/10 group-hover:border-cyan-500/40 transition-colors shadow-inner">
+                  <span className="text-cyan-400 font-black text-3xl tracking-tighter">
                     {service.price}
                   </span>
-                  <span className="text-[10px] text-cyan-400/70 ml-1 font-bold uppercase tracking-widest">
+                  <span className="text-[10px] text-cyan-400/70 ml-1 font-black uppercase tracking-widest">
                     RON
                   </span>
                 </div>
@@ -672,12 +777,12 @@ function ClientPageContent() {
         </div>
       )}
 
-      {/* STEP 3: Calendar & Ore (Premium Glass) */}
+      {/* STEP 3: Calendar & Ore */}
       {step === 3 && (
         <div className="animate-fade-in">
           <button
             onClick={() => setStep(2)}
-            className="cursor-pointer text-slate-400 hover:text-cyan-400 text-sm font-black uppercase tracking-wider mb-8 flex items-center gap-2 transition-colors w-max px-4 py-2 rounded-lg hover:bg-white/5"
+            className="cursor-pointer text-slate-400 hover:text-cyan-400 text-[10px] font-black uppercase tracking-widest mb-8 flex items-center gap-2 transition-colors w-max px-4 py-2.5 rounded-xl hover:bg-white/5 border border-transparent hover:border-white/10 shadow-sm"
           >
             <svg
               className="w-4 h-4"
@@ -692,15 +797,16 @@ function ClientPageContent() {
                 d="M15 19l-7-7 7-7"
               />
             </svg>
-            Alege Alt Serviciu
+            Schimbă Serviciul
           </button>
 
-          <h2 className="text-2xl font-black text-white mb-6">
+          <h2 className="text-2xl font-black text-white mb-8 tracking-tight">
             Selectează Data & Ora
           </h2>
 
-          <div className="bg-white/5 backdrop-blur-2xl border border-white/20 p-6 sm:p-10 rounded-[3rem] flex flex-col md:flex-row gap-10 shadow-2xl relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/10 rounded-full blur-[80px] pointer-events-none"></div>
+          <div className="bg-white/5 backdrop-blur-2xl border border-white/20 p-8 sm:p-12 rounded-[3rem] flex flex-col lg:flex-row gap-12 shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/10 rounded-full blur-[100px] pointer-events-none"></div>
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-500/40 via-purple-500/40 to-cyan-500/40"></div>
 
             {/* CALENDAR */}
             <div className="flex-1 relative z-10">
@@ -708,14 +814,13 @@ function ClientPageContent() {
                 Pas 1: Ziua
               </label>
 
-              <div className="bg-[#050505]/60 backdrop-blur-xl border border-white/10 p-6 rounded-[2rem] shadow-inner">
-                {/* Header Calendar */}
-                <div className="flex items-center justify-between mb-6 bg-white/5 rounded-2xl p-2 border border-white/10">
+              <div className="bg-[#050505]/80 backdrop-blur-2xl border border-white/10 p-6 sm:p-8 rounded-[2.5rem] shadow-inner">
+                <div className="flex items-center justify-between mb-8 bg-white/5 rounded-2xl p-2 border border-white/10">
                   <button
                     onClick={() =>
                       setCalendarViewDate(new Date(viewYear, viewMonth - 1, 1))
                     }
-                    className="cursor-pointer p-2.5 rounded-xl hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+                    className="cursor-pointer p-3 rounded-xl hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
                   >
                     <svg
                       className="w-5 h-5"
@@ -731,14 +836,14 @@ function ClientPageContent() {
                       />
                     </svg>
                   </button>
-                  <span className="font-black text-white text-base tracking-wide capitalize">
+                  <span className="font-black text-white text-base tracking-widest uppercase">
                     {monthNames[viewMonth]} {viewYear}
                   </span>
                   <button
                     onClick={() =>
                       setCalendarViewDate(new Date(viewYear, viewMonth + 1, 1))
                     }
-                    className="cursor-pointer p-2.5 rounded-xl hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
+                    className="cursor-pointer p-3 rounded-xl hover:bg-white/10 text-slate-400 hover:text-white transition-colors"
                   >
                     <svg
                       className="w-5 h-5"
@@ -756,18 +861,17 @@ function ClientPageContent() {
                   </button>
                 </div>
 
-                {/* Grid Calendar */}
-                <div className="grid grid-cols-7 gap-1.5 mb-2">
+                <div className="grid grid-cols-7 gap-2 mb-3">
                   {["Lu", "Ma", "Mi", "Jo", "Vi", "Sâ", "Du"].map((day) => (
                     <div
                       key={day}
-                      className="text-center text-[10px] font-black text-slate-500 uppercase tracking-widest pb-2"
+                      className="text-center text-[10px] font-black text-slate-500 uppercase tracking-widest"
                     >
                       {day}
                     </div>
                   ))}
                 </div>
-                <div className="grid grid-cols-7 gap-1.5">
+                <div className="grid grid-cols-7 gap-2">
                   {blanksArray.map((_, i) => (
                     <div key={`blank-${i}`} className="aspect-square"></div>
                   ))}
@@ -785,7 +889,7 @@ function ClientPageContent() {
                         key={day}
                         disabled={isPast || isBlocked}
                         onClick={() => handleDateSelect(dateStr)}
-                        className={`aspect-square flex items-center justify-center rounded-[1rem] text-sm font-black transition-all border ${isPast ? "text-slate-600 bg-transparent border-transparent cursor-not-allowed" : isBlocked ? "text-red-500/50 bg-red-500/10 line-through border-transparent cursor-not-allowed" : isSelected ? "bg-cyan-500 text-[#000428] shadow-[0_0_20px_rgba(34,211,238,0.5)] border-cyan-400 scale-105" : "text-white bg-white/5 border-white/10 hover:bg-cyan-500/20 hover:border-cyan-500/50 hover:text-cyan-400 cursor-pointer shadow-sm"}`}
+                        className={`aspect-square flex items-center justify-center rounded-2xl text-sm font-black transition-all border shadow-sm ${isPast ? "text-slate-700 bg-transparent border-transparent cursor-not-allowed opacity-50" : isBlocked ? "text-red-500/50 bg-red-500/10 line-through border-transparent cursor-not-allowed" : isSelected ? "bg-cyan-500 text-[#000428] shadow-[0_0_20px_rgba(34,211,238,0.5)] border-cyan-400 scale-110 z-10" : "text-white bg-white/5 border-white/10 hover:bg-cyan-500/20 hover:border-cyan-500/50 hover:text-cyan-400 cursor-pointer hover:scale-105"}`}
                       >
                         {day}
                       </button>
@@ -796,16 +900,16 @@ function ClientPageContent() {
             </div>
 
             {/* ORE */}
-            <div className="flex-1 relative z-10">
+            <div className="flex-1 relative z-10 flex flex-col">
               <label className="block text-[10px] font-black text-cyan-400 uppercase tracking-widest mb-4 pl-2">
                 Pas 2: Ora
               </label>
 
               {!selectedDate ? (
-                <div className="h-[300px] flex flex-col items-center justify-center bg-black/20 rounded-[2rem] border border-white/5 border-dashed">
-                  <div className="w-12 h-12 rounded-full bg-white/5 text-slate-500 flex items-center justify-center mb-3">
+                <div className="flex-1 flex flex-col items-center justify-center bg-black/40 rounded-[2.5rem] border-2 border-white/5 border-dashed min-h-[300px]">
+                  <div className="w-16 h-16 rounded-full bg-white/5 text-slate-500 flex items-center justify-center mb-4 shadow-inner">
                     <svg
-                      className="w-6 h-6"
+                      className="w-8 h-8"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -813,17 +917,17 @@ function ClientPageContent() {
                       <path
                         strokeLinecap="round"
                         strokeLinejoin="round"
-                        strokeWidth="2"
+                        strokeWidth="2.5"
                         d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
                       />
                     </svg>
                   </div>
-                  <p className="text-sm text-slate-400 font-bold uppercase tracking-widest">
-                    Alege o zi validă
+                  <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">
+                    Selectează o zi validă
                   </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-3 gap-3 animate-fade-in max-h-[350px] overflow-y-auto custom-scrollbar pr-2">
+                <div className="grid grid-cols-3 gap-4 animate-fade-in flex-1 content-start pr-2 overflow-y-auto custom-scrollbar max-h-[350px]">
                   {TIME_SLOTS.map((t) => {
                     const isToday =
                       selectedDate === new Date().toISOString().split("T")[0];
@@ -837,7 +941,7 @@ function ClientPageContent() {
                       <button
                         key={t}
                         onClick={() => setSelectedTime(t)}
-                        className={`cursor-pointer py-3.5 rounded-xl text-base font-black transition-all border shadow-sm ${selectedTime === t ? "bg-cyan-500 text-[#000428] border-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.5)] scale-105" : "bg-white/5 text-white border-white/10 hover:border-cyan-500/50 hover:bg-cyan-500/10 hover:text-cyan-400"}`}
+                        className={`cursor-pointer py-4 rounded-2xl text-lg font-black font-mono transition-all border shadow-sm ${selectedTime === t ? "bg-cyan-500 text-[#000428] border-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.5)] scale-105" : "bg-white/5 text-white border-white/10 hover:border-cyan-500/50 hover:bg-cyan-500/10 hover:text-cyan-400"}`}
                       >
                         {t}
                       </button>
@@ -846,15 +950,15 @@ function ClientPageContent() {
                 </div>
               )}
 
-              <div className="mt-8">
+              <div className="mt-8 shrink-0">
                 <button
                   onClick={() => setStep(4)}
                   disabled={!selectedDate || !selectedTime}
-                  className="w-full cursor-pointer bg-cyan-500 hover:bg-cyan-400 text-[#000428] font-black px-6 py-4 rounded-2xl transition-all shadow-[0_0_20px_rgba(34,211,238,0.3)] hover:shadow-[0_0_30px_rgba(34,211,238,0.5)] disabled:opacity-50 disabled:shadow-none text-lg flex justify-center items-center gap-2 hover:scale-[1.02]"
+                  className="w-full cursor-pointer bg-cyan-500 hover:bg-cyan-400 text-[#000428] font-black px-6 py-4 rounded-2xl transition-all shadow-[0_0_20px_rgba(34,211,238,0.3)] hover:shadow-[0_0_30px_rgba(34,211,238,0.5)] disabled:opacity-50 disabled:shadow-none text-lg flex justify-center items-center gap-3 hover:scale-[1.02]"
                 >
-                  Validare Programare{" "}
+                  Mergi la Confirmare{" "}
                   <svg
-                    className="w-5 h-5"
+                    className="w-6 h-6"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -878,7 +982,7 @@ function ClientPageContent() {
         <div className="animate-fade-in">
           <button
             onClick={() => setStep(3)}
-            className="cursor-pointer text-slate-400 hover:text-cyan-400 text-sm font-black uppercase tracking-wider mb-8 flex items-center gap-2 transition-colors w-max px-4 py-2 rounded-lg hover:bg-white/5"
+            className="cursor-pointer text-slate-400 hover:text-cyan-400 text-[10px] font-black uppercase tracking-widest mb-8 flex items-center gap-2 transition-colors w-max px-4 py-2.5 rounded-xl hover:bg-white/5 border border-transparent hover:border-white/10 shadow-sm"
           >
             <svg
               className="w-4 h-4"
@@ -893,73 +997,75 @@ function ClientPageContent() {
                 d="M15 19l-7-7 7-7"
               />
             </svg>
-            Modifică Ora
+            Înapoi la Calendar
           </button>
 
-          <h2 className="text-2xl font-black text-white mb-6">
-            Confirmare Finală
+          <h2 className="text-2xl font-black text-white mb-8 tracking-tight">
+            Rezumat Final
           </h2>
 
-          <div className="bg-white/5 backdrop-blur-2xl border border-white/20 p-8 sm:p-12 rounded-[3rem] mb-8 relative overflow-hidden shadow-2xl">
+          <div className="bg-white/5 backdrop-blur-2xl border border-white/20 p-8 sm:p-12 rounded-[3rem] mb-10 relative overflow-hidden shadow-2xl">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-500/50 via-purple-500/50 to-cyan-500/50"></div>
             <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/10 rounded-full blur-[100px] pointer-events-none"></div>
 
-            <div className="relative z-10 space-y-8">
-              <div className="flex items-center justify-between border-b border-white/10 pb-8">
+            <div className="relative z-10 space-y-10">
+              <div className="flex items-center justify-between border-b border-white/10 pb-10">
                 <div>
-                  <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-1.5">
+                  <p className="text-[10px] text-cyan-400 uppercase font-black tracking-widest mb-2">
                     Locație & Frizer
                   </p>
-                  <p className="text-2xl sm:text-3xl text-white font-black tracking-tight">
+                  <p className="text-3xl text-white font-black tracking-tight">
                     {selectedBarber.barbershop_name ||
                       selectedBarber.first_name}
                   </p>
                 </div>
-                <div className="w-16 h-16 bg-cyan-500/10 rounded-2xl flex items-center justify-center border border-cyan-500/30 text-2xl shadow-inner">
+                <div className="w-16 h-16 bg-cyan-500/10 rounded-2xl flex items-center justify-center border border-cyan-500/30 text-3xl shadow-inner shrink-0">
                   📍
                 </div>
               </div>
 
-              <div className="flex items-center justify-between border-b border-white/10 pb-8">
+              <div className="flex items-center justify-between border-b border-white/10 pb-10">
                 <div>
-                  <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-1.5">
+                  <p className="text-[10px] text-cyan-400 uppercase font-black tracking-widest mb-2">
                     Data & Ora Rezervării
                   </p>
-                  <p className="text-2xl text-white font-bold capitalize">
+                  <p className="text-3xl text-white font-black capitalize tracking-tight mb-2">
                     {new Date(selectedDate).toLocaleDateString("ro-RO", {
                       weekday: "long",
                       day: "numeric",
                       month: "long",
                     })}
                   </p>
-                  <p className="text-cyan-400 font-mono font-black mt-2 text-2xl">
+                  <p className="text-cyan-400 font-mono font-black text-3xl tracking-tighter">
                     La ora {selectedTime}
                   </p>
                 </div>
-                <div className="w-16 h-16 bg-cyan-500/10 rounded-2xl flex items-center justify-center border border-cyan-500/30 text-2xl shadow-inner">
+                <div className="w-16 h-16 bg-cyan-500/10 rounded-2xl flex items-center justify-center border border-cyan-500/30 text-3xl shadow-inner shrink-0">
                   ⏰
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pt-4 gap-6">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between pt-4 gap-8">
                 <div>
-                  <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-1.5">
+                  <p className="text-[10px] text-cyan-400 uppercase font-black tracking-widest mb-2">
                     Serviciu Ales
                   </p>
-                  <p className="text-2xl text-white font-black tracking-tight">
+                  <p className="text-3xl text-white font-black tracking-tight mb-2">
                     {selectedService.name}
                   </p>
-                  <p className="text-sm font-bold text-cyan-400/80 mt-1 uppercase tracking-widest">
-                    Plata se face în locație
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest bg-white/5 px-3 py-1.5 rounded-lg border border-white/10 inline-block">
+                    Plata se face în locație (CASH/CARD)
                   </p>
                 </div>
-                <div className="text-left sm:text-right bg-black/30 px-6 py-4 rounded-2xl border border-white/10 shadow-inner">
-                  <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-1">
-                    Total de plată
+                <div className="w-full md:w-auto text-center md:text-right bg-black/40 px-8 py-6 rounded-[2rem] border border-white/10 shadow-inner">
+                  <p className="text-[10px] text-cyan-400/80 uppercase font-black tracking-widest mb-1">
+                    Total de Plată
                   </p>
-                  <p className="text-4xl font-black text-cyan-400">
+                  <p className="text-5xl font-black text-cyan-400">
                     {selectedService.price}{" "}
-                    <span className="text-lg text-cyan-500/70">RON</span>
+                    <span className="text-xl text-cyan-500/70 tracking-widest uppercase">
+                      RON
+                    </span>
                   </p>
                 </div>
               </div>
@@ -970,7 +1076,7 @@ function ClientPageContent() {
             <button
               onClick={handleBookAppointment}
               disabled={isSubmitting}
-              className="cursor-pointer w-full sm:w-auto bg-cyan-500 hover:bg-cyan-400 text-[#000428] font-black px-12 py-4 rounded-2xl transition-all shadow-[0_0_25px_rgba(34,211,238,0.4)] hover:shadow-[0_0_35px_rgba(34,211,238,0.6)] disabled:opacity-50 text-lg flex items-center justify-center gap-3 hover:scale-105"
+              className="cursor-pointer w-full sm:w-auto bg-cyan-500 hover:bg-cyan-400 text-[#000428] font-black px-12 py-5 rounded-2xl transition-all shadow-[0_0_25px_rgba(34,211,238,0.4)] hover:shadow-[0_0_40px_rgba(34,211,238,0.6)] disabled:opacity-50 text-xl flex items-center justify-center gap-3 hover:scale-[1.02]"
             >
               {isSubmitting ? (
                 <span className="w-6 h-6 border-4 border-[#000428] border-t-transparent rounded-full animate-spin"></span>
@@ -982,10 +1088,11 @@ function ClientPageContent() {
         </div>
       )}
 
-      {/* MODAL EROARE */}
+      {/* MODAL EROARE CUSTOM */}
       {activeModal === "error" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-          <div className="w-full max-w-sm bg-[#050505]/95 backdrop-blur-2xl border border-red-500/30 p-8 rounded-[2rem] shadow-2xl relative overflow-hidden">
+          <div className="w-full max-w-sm bg-[#050505]/95 backdrop-blur-2xl border border-red-500/30 p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-1 bg-red-500/20"></div>
             <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-6 border-4 border-red-500/20 text-red-400 shadow-inner relative z-10">
               <svg
                 className="w-8 h-8"
@@ -1001,15 +1108,15 @@ function ClientPageContent() {
                 />
               </svg>
             </div>
-            <h2 className="text-xl font-black text-white mb-3 text-center relative z-10">
+            <h2 className="text-xl font-black text-white mb-2 text-center tracking-tight relative z-10">
               Atenție!
             </h2>
-            <p className="text-red-400 text-sm mb-8 text-center font-bold leading-relaxed relative z-10">
+            <p className="text-slate-300 text-sm mb-8 text-center font-medium leading-relaxed relative z-10">
               {modalMessage}
             </p>
             <button
               onClick={() => setActiveModal("none")}
-              className="w-full py-4 rounded-xl bg-white/5 border border-white/10 text-white font-bold hover:bg-white/10 transition-all cursor-pointer shadow-sm relative z-10"
+              className="w-full py-3.5 rounded-xl bg-red-500 text-[#0a0a0a] font-black hover:bg-red-400 transition-all cursor-pointer shadow-[0_0_20px_rgba(239,68,68,0.4)] relative z-10"
             >
               Închide
             </button>

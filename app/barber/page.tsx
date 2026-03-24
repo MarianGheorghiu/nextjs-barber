@@ -85,7 +85,6 @@ export default function BarberDashboardPage() {
   const [leaveDate, setLeaveDate] = useState("");
   const [calendarViewDate, setCalendarViewDate] = useState(new Date());
 
-  // Confirm Modal Universal
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -109,7 +108,30 @@ export default function BarberDashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
-  const fetchDashboardData = async () => {
+  // ================= REALTIME SYNC (Corectat) =================
+  useEffect(() => {
+    if (!barberId) return;
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel("realtime-barber-dashboard")
+      .on(
+        "postgres_changes",
+        // Ascultăm tot tabelul ca să meargă perfect UPDATE și DELETE
+        { event: "*", schema: "public", table: "appointments" },
+        () => {
+          fetchDashboardData(false);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [barberId]);
+
+  const fetchDashboardData = async (showLoader = true) => {
+    if (showLoader) setLoading(true);
     const supabase = createClient();
     const {
       data: { user },
@@ -161,7 +183,7 @@ export default function BarberDashboardPage() {
       );
       setNextAppointment(upcoming || null);
     }
-    setLoading(false);
+    if (showLoader) setLoading(false);
   };
 
   const handleStatusChange = async (id: string, newStatus: string) => {
@@ -190,7 +212,6 @@ export default function BarberDashboardPage() {
     }
   };
 
-  // --- ÎNLOCUIRE ALERTE CU MODALE ---
   const triggerTakeLeave = () => {
     if (!leaveDate || !barberId) return;
     setConfirmModal({
@@ -251,7 +272,6 @@ export default function BarberDashboardPage() {
     });
   };
 
-  // Calendar Engine
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const viewYear = calendarViewDate.getFullYear();
@@ -293,7 +313,6 @@ export default function BarberDashboardPage() {
 
   return (
     <div className="animate-fade-in max-w-6xl mx-auto pb-10 relative">
-      {/* HEADER */}
       <div className="mb-8">
         <h1 className="text-3xl sm:text-4xl font-black text-white mb-1 tracking-tight">
           Salutare,{" "}
@@ -309,11 +328,10 @@ export default function BarberDashboardPage() {
             day: "numeric",
             month: "long",
           })}
-          .
+          . Statusul se actualizează Live.
         </p>
       </div>
 
-      {/* 3 PANOURI LIQUID GLASS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
         <div className="bg-white/5 backdrop-blur-xl border border-white/20 p-6 rounded-[2rem] relative overflow-hidden group shadow-xl flex flex-col justify-center">
           <div className="absolute -right-6 -top-6 w-32 h-32 bg-cyan-500/10 rounded-full blur-[40px] transition-all pointer-events-none group-hover:bg-cyan-500/20"></div>
@@ -411,13 +429,12 @@ export default function BarberDashboardPage() {
         </div>
       </div>
 
-      {/* AGENDA DE AZI LIQUID GLASS */}
       <div className="bg-white/5 backdrop-blur-2xl border border-white/20 rounded-[2.5rem] p-6 sm:p-8 shadow-2xl relative overflow-hidden flex flex-col">
         <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/10 rounded-full blur-[100px] pointer-events-none"></div>
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-500/40 via-purple-500/40 to-cyan-500/40"></div>
 
         <h3 className="text-xl font-black text-white mb-6 flex items-center gap-3 relative z-10">
-          <div className="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20 text-cyan-400 shadow-inner">
+          <span className="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20 text-cyan-400 shadow-inner">
             <svg
               className="w-5 h-5"
               fill="none"
@@ -431,8 +448,13 @@ export default function BarberDashboardPage() {
                 d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
               />
             </svg>
-          </div>
+          </span>
           Agenda Zilei Curente
+          {/* Corectat Hydration Error (div -> span) */}
+          <span className="flex items-center gap-1.5 ml-auto text-[10px] text-green-400 uppercase tracking-widest font-bold bg-green-500/10 px-3 py-1.5 rounded-full border border-green-500/20">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
+            Live Sync
+          </span>
         </h3>
 
         {todayAppointments.length === 0 ? (
@@ -444,7 +466,7 @@ export default function BarberDashboardPage() {
               Ai zi liberă momentan.
             </p>
             <p className="text-sm text-slate-400">
-              Nu este înregistrată nicio programare pentru azi.
+              Dacă un client se programează, va apărea aici instantaneu.
             </p>
           </div>
         ) : (
@@ -470,7 +492,6 @@ export default function BarberDashboardPage() {
                       key={app.id}
                       className={`border-b border-white/5 transition-colors group ${isCancelled ? "bg-white/[0.03] hover:bg-white/[0.06]" : "hover:bg-white/5"}`}
                     >
-                      {/* ORA */}
                       <td className="py-5 pl-6 align-middle">
                         <div className="flex items-center gap-2.5">
                           <span
@@ -498,8 +519,6 @@ export default function BarberDashboardPage() {
                           )}
                         </div>
                       </td>
-
-                      {/* CLIENT */}
                       <td className="py-5 align-middle">
                         <p
                           className={`font-bold text-lg tracking-tight mb-0.5 ${isCancelled ? "text-slate-500 line-through decoration-slate-600" : "text-white"}`}
@@ -512,8 +531,6 @@ export default function BarberDashboardPage() {
                           📞 {app.client_phone || "-"}
                         </p>
                       </td>
-
-                      {/* SERVICIU */}
                       <td className="py-5 align-middle">
                         <p
                           className={`font-bold text-base tracking-tight mb-0.5 ${isCancelled ? "text-slate-500" : "text-slate-200"}`}
@@ -526,8 +543,6 @@ export default function BarberDashboardPage() {
                           {app.price} RON
                         </p>
                       </td>
-
-                      {/* ACȚIUNI */}
                       <td className="py-5 text-right pr-6 align-middle">
                         <div className="flex justify-end gap-2 items-center">
                           {!isConfirmed && !isCancelled && !isRescheduled && (
@@ -540,7 +555,6 @@ export default function BarberDashboardPage() {
                               ✓ Confirmă
                             </button>
                           )}
-
                           {!isCancelled && (
                             <button
                               onClick={() =>
@@ -556,7 +570,6 @@ export default function BarberDashboardPage() {
                               ↻ Mută
                             </button>
                           )}
-
                           {!isCancelled && (
                             <button
                               onClick={() =>
@@ -567,13 +580,11 @@ export default function BarberDashboardPage() {
                               ✕ Anulează
                             </button>
                           )}
-
                           {isRescheduled && (
                             <span className="px-4 py-2 rounded-xl bg-orange-500/10 text-orange-400 border border-orange-500/20 text-xs font-bold shadow-inner">
                               Așteaptă Client
                             </span>
                           )}
-
                           {isCancelled && (
                             <>
                               <span className="px-4 py-2 rounded-xl bg-slate-800 text-slate-400 border border-white/5 text-xs font-bold">
@@ -598,16 +609,12 @@ export default function BarberDashboardPage() {
         )}
       </div>
 
-      {/* ================= MODALE LIQUID GLASS PREMIUM ================= */}
-
-      {/* Modal Confirmare Universal */}
       {confirmModal.isOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in">
           <div
             className={`bg-[#050505]/95 backdrop-blur-2xl border p-8 rounded-[2.5rem] w-full max-w-sm shadow-2xl relative overflow-hidden ${confirmModal.buttonColor === "red" ? "border-red-500/30" : confirmModal.buttonColor === "orange" ? "border-orange-500/30" : "border-cyan-500/30"}`}
           >
             <div className="absolute top-0 left-0 w-full h-1 bg-white/10"></div>
-
             <div
               className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 border-4 shadow-inner relative z-10 ${confirmModal.buttonColor === "red" ? "bg-red-500/10 border-red-500/20 text-red-400" : confirmModal.buttonColor === "orange" ? "bg-orange-500/10 border-orange-500/20 text-orange-400" : "bg-cyan-500/10 border-cyan-500/20 text-cyan-400"}`}
             >
@@ -625,14 +632,12 @@ export default function BarberDashboardPage() {
                 />
               </svg>
             </div>
-
             <h3 className="text-xl font-black text-white mb-2 text-center tracking-tight relative z-10">
               {confirmModal.title}
             </h3>
             <p className="text-slate-300 text-sm mb-8 text-center font-medium leading-relaxed relative z-10">
               {confirmModal.message}
             </p>
-
             <div className="flex gap-3 relative z-10">
               <button
                 onClick={() =>
@@ -654,25 +659,22 @@ export default function BarberDashboardPage() {
         </div>
       )}
 
-      {/* Modal Reprogramare */}
       {rescheduleData && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-[#050505]/95 backdrop-blur-2xl border border-yellow-500/30 p-8 rounded-[2.5rem] w-full max-w-md shadow-2xl relative overflow-hidden">
             <div className="absolute top-0 right-0 w-48 h-48 bg-yellow-500/10 rounded-full blur-[60px] pointer-events-none"></div>
-
             <div className="relative z-10 mb-6">
               <h3 className="text-2xl font-black text-white tracking-tight mb-1">
                 Reprogramare
               </h3>
               <p className="text-slate-400 text-sm font-medium">
-                Mută programarea pentru{" "}
+                Modifici programarea pentru{" "}
                 <span className="text-yellow-400 font-bold">
                   {rescheduleData.name}
                 </span>
                 .
               </p>
             </div>
-
             <div className="space-y-5 mb-8 relative z-10">
               <div>
                 <label className="block text-[10px] font-bold text-yellow-400/80 uppercase tracking-widest mb-1.5 ml-1">
@@ -735,7 +737,6 @@ export default function BarberDashboardPage() {
                 </div>
               </div>
             </div>
-
             <div className="flex gap-3 relative z-10">
               <button
                 onClick={() => setRescheduleData(null)}
@@ -755,12 +756,10 @@ export default function BarberDashboardPage() {
         </div>
       )}
 
-      {/* Modal Zile Libere */}
       {showLeaveModal && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-[#050505]/95 backdrop-blur-2xl border border-orange-500/30 p-6 sm:p-8 rounded-[2.5rem] w-full max-w-sm shadow-2xl relative overflow-hidden">
             <div className="absolute top-0 right-0 w-48 h-48 bg-orange-500/10 rounded-full blur-[60px] pointer-events-none"></div>
-
             <div className="text-center mb-6 relative z-10">
               <h3 className="text-2xl font-black text-white tracking-tight mb-1">
                 Zi Liberă
@@ -769,7 +768,6 @@ export default function BarberDashboardPage() {
                 Selectează o zi pentru a o bloca în calendar.
               </p>
             </div>
-
             <div className="relative z-10">
               <div className="flex items-center justify-between mb-5 bg-white/5 rounded-xl p-1.5 border border-white/10 shadow-inner">
                 <button
@@ -816,7 +814,6 @@ export default function BarberDashboardPage() {
                   </svg>
                 </button>
               </div>
-
               <div className="mb-8">
                 <div className="grid grid-cols-7 gap-1.5 mb-2">
                   {["Lu", "Ma", "Mi", "Jo", "Vi", "Sâ", "Du"].map((day) => (
@@ -832,11 +829,9 @@ export default function BarberDashboardPage() {
                   {blanksArray.map((_, i) => (
                     <div key={`blank-${i}`} className="aspect-square"></div>
                   ))}
-
                   {daysArray.map((day) => {
                     const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
                     const cellDate = new Date(viewYear, viewMonth, day);
-
                     const isPast = cellDate < today;
                     const isAlreadyBlocked = blockedDays.includes(dateStr);
                     const isDisabled = isPast || isAlreadyBlocked;
@@ -861,7 +856,6 @@ export default function BarberDashboardPage() {
                 </div>
               </div>
             </div>
-
             <div className="flex gap-3 relative z-10">
               <button
                 onClick={() => {

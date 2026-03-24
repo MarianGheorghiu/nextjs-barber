@@ -108,15 +108,36 @@ export default function WeeklyAppointmentsPage() {
       setBarberId(user.id);
 
       await cleanupPastAppointmentsAction(user.id);
-      await fetchAppointments(user.id);
+      await fetchAppointments(user.id, true);
     };
 
     initPage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
-  const fetchAppointments = async (id: string) => {
-    setLoading(true);
+  // ================= REALTIME SYNC =================
+  useEffect(() => {
+    if (!barberId) return;
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel("realtime-barber-weekly-list")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "appointments" }, // Ascultăm tot tabelul pentru a prinde și DELETE
+        () => {
+          fetchAppointments(barberId, false); // Reîncărcare tăcută în fundal
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [barberId]);
+
+  const fetchAppointments = async (id: string, showLoader = true) => {
+    if (showLoader) setLoading(true);
     const supabase = createClient();
     const { data, error } = await supabase
       .from("appointments")
@@ -126,7 +147,7 @@ export default function WeeklyAppointmentsPage() {
       .order("appointment_time", { ascending: true });
 
     if (data && !error) setAppointments(data);
-    setLoading(false);
+    if (showLoader) setLoading(false);
   };
 
   const showAlert = (
@@ -161,7 +182,7 @@ export default function WeeklyAppointmentsPage() {
 
     if (result.success) {
       setRescheduleData(null);
-      fetchAppointments(barberId);
+      fetchAppointments(barberId, false);
       showAlert(
         "Reprogramare Trimisă",
         `O cerere de reprogramare a fost trimisă către ${rescheduleData.name}. Programarea este în așteptare până la validare.`,
@@ -206,7 +227,7 @@ export default function WeeklyAppointmentsPage() {
     if (!barberId) return;
     setIsProcessing(true);
     await createMockAppointmentAction(barberId);
-    await fetchAppointments(barberId);
+    await fetchAppointments(barberId, false);
     setIsProcessing(false);
     showAlert(
       "Succes",
@@ -237,8 +258,12 @@ export default function WeeklyAppointmentsPage() {
       {/* HEADER SPAȚIOS & BUTON TEST */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 mb-8">
         <div>
-          <h1 className="text-3xl sm:text-4xl font-black text-white mb-2 tracking-tight">
+          <h1 className="text-3xl sm:text-4xl font-black text-white mb-2 tracking-tight flex items-center gap-3">
             Programări Viitoare
+            <span className="flex items-center gap-1.5 text-[10px] text-green-400 uppercase tracking-widest font-bold bg-green-500/10 px-3 py-1.5 rounded-full border border-green-500/20">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>{" "}
+              Live Sync
+            </span>
           </h1>
           <p className="text-slate-400 text-sm font-medium">
             Vizualizează și gestionează toată agenda ta viitoare.
@@ -247,7 +272,7 @@ export default function WeeklyAppointmentsPage() {
         <button
           onClick={generateTestAppointment}
           disabled={isProcessing}
-          className="cursor-pointer bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/30 font-black px-6 py-3.5 rounded-xl transition-all text-sm uppercase tracking-wider flex items-center gap-2 shadow-inner disabled:opacity-50"
+          className="cursor-pointer bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/30 font-black px-6 py-3.5 rounded-xl transition-all text-sm uppercase tracking-wider flex items-center gap-2 shadow-inner disabled:opacity-50 hover:shadow-[0_0_15px_rgba(168,85,247,0.3)]"
         >
           {isProcessing ? "Așteaptă..." : "+ Client de Test"}
         </button>
@@ -596,7 +621,6 @@ export default function WeeklyAppointmentsPage() {
 
       {/* ================= MODALE CENTRALE ================= */}
 
-      {/* Modal Alertă */}
       {activeModal === "alert" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
           <div
@@ -668,7 +692,6 @@ export default function WeeklyAppointmentsPage() {
         </div>
       )}
 
-      {/* Modal Confirmare (Ștergere Definitivă) */}
       {activeModal === "confirm" && (
         <div
           className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in`}

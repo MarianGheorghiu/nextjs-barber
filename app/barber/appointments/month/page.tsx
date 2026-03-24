@@ -79,14 +79,12 @@ export default function CalendarGridPage() {
   const [loading, setLoading] = useState(true);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [barberId, setBarberId] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
 
   const [currentWeekStart, setCurrentWeekStart] = useState<Date>(
     getMonday(new Date()),
   );
   const [weekDays, setWeekDays] = useState<Date[]>([]);
 
-  // ================= MODAL STATES =================
   const [rescheduleData, setRescheduleData] = useState<{
     id: string;
     date: string;
@@ -94,6 +92,7 @@ export default function CalendarGridPage() {
     name: string;
   } | null>(null);
 
+  // ================= MODAL STATES =================
   const [activeModal, setActiveModal] = useState<"none" | "alert" | "confirm">(
     "none",
   );
@@ -135,14 +134,40 @@ export default function CalendarGridPage() {
       setBarberId(user.id);
 
       await cleanupPastAppointmentsAction(user.id);
-      await fetchAppointmentsForWeek(user.id, currentWeekStart);
+      await fetchAppointmentsForWeek(user.id, currentWeekStart, true);
     };
 
     initCalendar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentWeekStart, router]);
 
-  const fetchAppointmentsForWeek = async (id: string, startOfWeek: Date) => {
+  // ================= REALTIME SYNC =================
+  useEffect(() => {
+    if (!barberId) return;
+
+    const supabase = createClient();
+    const channel = supabase
+      .channel("realtime-barber-weekly-kanban")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "appointments" },
+        () => {
+          fetchAppointmentsForWeek(barberId, currentWeekStart, false);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [barberId, currentWeekStart]);
+
+  const fetchAppointmentsForWeek = async (
+    id: string,
+    startOfWeek: Date,
+    showLoader = true,
+  ) => {
+    if (showLoader) setLoading(true);
     const endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(endOfWeek.getDate() + 6);
 
@@ -156,7 +181,7 @@ export default function CalendarGridPage() {
       .order("appointment_time", { ascending: true });
 
     if (data && !error) setAppointments(data);
-    setLoading(false);
+    if (showLoader) setLoading(false);
   };
 
   const showAlert = (
@@ -193,11 +218,10 @@ export default function CalendarGridPage() {
     }
   };
 
-  // FUNCȚIA REPARATĂ: Se numește corect triggerDelete și folosește numele clientului!
   const triggerDelete = (id: string, clientName: string) => {
     setConfirmConfig({
       title: "Ștergere Definitivă",
-      message: `Ești sigur că vrei să ștergi definitiv programarea anulată pentru ${clientName}? Acțiunea nu poate fi anulată.`,
+      message: `Ești sigur că vrei să ștergi definitiv programarea anulată pentru ${clientName || "Client"}? Acțiunea nu poate fi anulată.`,
       buttonText: "Șterge",
       buttonColor: "red",
       action: async () => {
@@ -232,7 +256,7 @@ export default function CalendarGridPage() {
 
     if (result.success) {
       setRescheduleData(null);
-      fetchAppointmentsForWeek(barberId, currentWeekStart);
+      fetchAppointmentsForWeek(barberId, currentWeekStart, false);
       showAlert(
         "Reprogramare Trimisă",
         "Propunerea de reprogramare a fost trimisă clientului.",
@@ -257,7 +281,7 @@ export default function CalendarGridPage() {
       action: async () => {
         setIsProcessing(true);
         await confirmAppointmentsByDateRangeAction(barberId, dateStr, dateStr);
-        await fetchAppointmentsForWeek(barberId, currentWeekStart);
+        await fetchAppointmentsForWeek(barberId, currentWeekStart, false);
         setIsProcessing(false);
         setActiveModal("none");
       },
@@ -275,146 +299,12 @@ export default function CalendarGridPage() {
       action: async () => {
         setIsProcessing(true);
         await deleteAppointmentsByDateRangeAction(barberId, dateStr, dateStr);
-        await fetchAppointmentsForWeek(barberId, currentWeekStart);
+        await fetchAppointmentsForWeek(barberId, currentWeekStart, false);
         setIsProcessing(false);
         setActiveModal("none");
       },
     });
     setActiveModal("confirm");
-  };
-
-  const generateMockClientsForThisWeek = async () => {
-    if (!barberId) return;
-    setIsProcessing(true);
-    const supabase = createClient();
-    const weekDates = [];
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(currentWeekStart);
-      d.setDate(d.getDate() + i);
-      weekDates.push(formatDateForDB(d));
-    }
-
-    const mocks = [
-      {
-        barber_id: barberId,
-        client_name: "Andrei S.",
-        client_phone: "0722111222",
-        service_name: "Tuns Clasic",
-        price: 60,
-        appointment_date: weekDates[0],
-        appointment_time: "10:30",
-        status: "pending",
-      },
-      {
-        barber_id: barberId,
-        client_name: "Mihai V.",
-        client_phone: "0733444555",
-        service_name: "Pachet Premium",
-        price: 120,
-        appointment_date: weekDates[0],
-        appointment_time: "14:00",
-        status: "confirmed",
-      },
-      {
-        barber_id: barberId,
-        client_name: "Cristi M.",
-        client_phone: "0744999888",
-        service_name: "Aranjat Barbă",
-        price: 40,
-        appointment_date: weekDates[1],
-        appointment_time: "11:30",
-        status: "pending",
-      },
-      {
-        barber_id: barberId,
-        client_name: "Ion Pop",
-        client_phone: "0755123456",
-        service_name: "Tuns",
-        price: 50,
-        appointment_date: weekDates[1],
-        appointment_time: "16:00",
-        status: "confirmed",
-      },
-      {
-        barber_id: barberId,
-        client_name: "Alex G.",
-        client_phone: "0722333444",
-        service_name: "Tuns + Spălat",
-        price: 70,
-        appointment_date: weekDates[2],
-        appointment_time: "09:30",
-        status: "pending",
-      },
-      {
-        barber_id: barberId,
-        client_name: "Sorin D.",
-        client_phone: "0766222333",
-        service_name: "Tuns Premium",
-        price: 100,
-        appointment_date: weekDates[2],
-        appointment_time: "18:00",
-        status: "pending",
-      },
-      {
-        barber_id: barberId,
-        client_name: "Vlad P.",
-        client_phone: "0777444111",
-        service_name: "Tuns Clasic",
-        price: 60,
-        appointment_date: weekDates[3],
-        appointment_time: "13:30",
-        status: "confirmed",
-      },
-      {
-        barber_id: barberId,
-        client_name: "Bogdan C.",
-        client_phone: "0788555222",
-        service_name: "Tuns + Barbă",
-        price: 90,
-        appointment_date: weekDates[4],
-        appointment_time: "15:30",
-        status: "pending",
-      },
-      {
-        barber_id: barberId,
-        client_name: "Radu I.",
-        client_phone: "0799666333",
-        service_name: "Pachet Premium",
-        price: 120,
-        appointment_date: weekDates[5],
-        appointment_time: "10:00",
-        status: "pending",
-      },
-      {
-        barber_id: barberId,
-        client_name: "Florin B.",
-        client_phone: "0711222333",
-        service_name: "Tuns Copil",
-        price: 40,
-        appointment_date: weekDates[5],
-        appointment_time: "11:30",
-        status: "confirmed",
-      },
-      {
-        barber_id: barberId,
-        client_name: "Gabi T.",
-        client_phone: "0722888999",
-        service_name: "Tuns Rapid",
-        price: 50,
-        appointment_date: weekDates[6],
-        appointment_time: "12:00",
-        status: "pending",
-      },
-    ];
-
-    await supabase.from("appointments").insert(mocks);
-    await fetchAppointmentsForWeek(barberId, currentWeekStart);
-    setIsProcessing(false);
-    showAlert(
-      "Săptămână Generată",
-      "Zilele curente au fost umplute cu clienți de test.",
-      "success",
-    );
   };
 
   const weekEnd = new Date(currentWeekStart);
@@ -434,17 +324,21 @@ export default function CalendarGridPage() {
 
   return (
     <div className="animate-fade-in max-w-[95rem] mx-auto pb-4 h-[calc(100vh-6rem)] flex flex-col relative">
-      {/* HEADER KANBAN LIQUID GLASS */}
+      {/* HEADER KANBAN */}
       <div className="shrink-0 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 mb-6 bg-white/5 backdrop-blur-2xl border border-white/20 p-6 sm:p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/10 rounded-full blur-[80px] pointer-events-none"></div>
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-500/40 via-purple-500/40 to-cyan-500/40"></div>
 
         <div className="w-full xl:w-auto flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 relative z-10">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-black text-white mb-1 tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-black text-white mb-1 tracking-tight flex items-center gap-3">
               Calendar Kanban
+              <span className="flex items-center gap-1.5 text-[10px] text-green-400 uppercase tracking-widest font-bold bg-green-500/10 px-3 py-1.5 rounded-full border border-green-500/20">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
+                Live Sync
+              </span>
             </h1>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">
               Afișare Săptămânală
             </p>
           </div>
@@ -491,18 +385,10 @@ export default function CalendarGridPage() {
             </button>
           </div>
         </div>
-
-        <button
-          onClick={generateMockClientsForThisWeek}
-          disabled={isProcessing}
-          className="cursor-pointer relative z-10 bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/30 font-black px-6 py-3.5 rounded-xl transition-all text-xs uppercase tracking-widest w-full sm:w-auto text-center shadow-sm disabled:opacity-50 hover:shadow-[0_0_15px_rgba(168,85,247,0.3)]"
-        >
-          {isProcessing ? "Așteaptă..." : "+ Populează Săptămâna"}
-        </button>
       </div>
 
-      {/* TRACKING ORIZONTAL ZILE */}
-      <div className="flex-1 overflow-x-auto snap-x min-h-0 pb-4 [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-track]:bg-black/20 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-thumb]:bg-cyan-500/30 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-cyan-500/50 transition-all">
+      {/* TRACKING ORIZONTAL ZILE (GPU OPTIMIZAT) */}
+      <div className="flex-1 overflow-x-auto snap-x min-h-0 pb-4 transform-gpu scroll-smooth [&::-webkit-scrollbar]:h-2.5 [&::-webkit-scrollbar-track]:bg-black/20 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-thumb]:bg-cyan-500/30 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-cyan-500/50 transition-all">
         <div className="flex gap-5 h-full px-2">
           {weekDays.map((day, index) => {
             const dateStr = formatDateForDB(day);
@@ -517,13 +403,14 @@ export default function CalendarGridPage() {
             );
 
             return (
+              // FĂRĂ backdrop-blur aici pentru a evita crash-ul pe mobil/safari la scroll
               <div
                 key={index}
-                className={`flex flex-col min-w-[300px] w-full max-w-[340px] bg-white/5 backdrop-blur-md border rounded-[2rem] overflow-hidden snap-start flex-shrink-0 h-full shadow-xl transition-colors ${isToday ? "border-cyan-500/40 shadow-[0_0_20px_rgba(34,211,238,0.1)]" : "border-white/10"}`}
+                className={`flex flex-col min-w-[300px] w-full max-w-[340px] bg-[#0a0a0a]/95 border rounded-[2rem] overflow-hidden snap-start flex-shrink-0 h-full shadow-2xl transition-colors transform-gpu ${isToday ? "border-cyan-500/40 shadow-[0_0_20px_rgba(34,211,238,0.1)]" : "border-white/10"}`}
               >
                 {/* Header Zi */}
                 <div
-                  className={`shrink-0 p-5 border-b ${isToday ? "bg-cyan-500/10 border-b-cyan-500/30" : "bg-black/40 border-white/5"}`}
+                  className={`shrink-0 p-5 border-b ${isToday ? "bg-cyan-500/10 border-b-cyan-500/30" : "bg-black/60 border-white/5"}`}
                 >
                   <div className="flex justify-between items-center">
                     <div>
@@ -567,7 +454,7 @@ export default function CalendarGridPage() {
                 </div>
 
                 {/* Lista Programări */}
-                <div className="flex-1 p-3 space-y-3 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-cyan-500/40 pr-2">
+                <div className="flex-1 p-3 space-y-3 overflow-y-auto transform-gpu [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-cyan-500/40 pr-2">
                   {dayAppointments.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center text-slate-500">
                       <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-3">
@@ -584,16 +471,24 @@ export default function CalendarGridPage() {
                       const isCancelled = app.status === "cancelled";
                       const isRescheduled = app.status === "rescheduled";
 
+                      // Fallback-uri de siguranță anti-crash
+                      const safeTime = app.appointment_time
+                        ? app.appointment_time.slice(0, 5)
+                        : "--:--";
+                      const safeName = app.client_name || "Client Necunoscut";
+                      const safePhone = app.client_phone || "-";
+                      const safeService = app.service_name || "Serviciu șters";
+
                       return (
                         <div
                           key={app.id}
-                          className={`relative p-4 rounded-[1.5rem] border transition-all shadow-inner ${isConfirmed ? "bg-green-500/5 border-green-500/20" : isCancelled ? "bg-red-500/5 border-red-500/20 opacity-70" : isRescheduled ? "bg-orange-500/5 border-orange-500/20" : "bg-black/40 border-white/10 hover:border-cyan-500/30 hover:bg-white/5"}`}
+                          className={`relative p-4 rounded-[1.5rem] border transition-all shadow-inner ${isConfirmed ? "bg-green-500/5 border-green-500/20" : isCancelled ? "bg-red-500/5 border-red-500/20 opacity-70" : isRescheduled ? "bg-orange-500/5 border-orange-500/20" : "bg-black/60 border-white/10 hover:border-cyan-500/30 hover:bg-white/5"}`}
                         >
                           <div className="flex justify-between items-center mb-2.5">
                             <span
                               className={`font-mono font-black text-xl tracking-tight leading-none ${isCancelled ? "text-slate-500 line-through" : isRescheduled ? "text-orange-400" : "text-cyan-400"}`}
                             >
-                              {app.appointment_time.slice(0, 5)}
+                              {safeTime}
                             </span>
                             <div className="flex gap-1.5">
                               {isPending && (
@@ -626,19 +521,19 @@ export default function CalendarGridPage() {
                           <div className="flex justify-between items-end">
                             <div>
                               <p
-                                className={`font-black text-base leading-tight mb-0.5 ${isCancelled ? "text-slate-400" : "text-white"}`}
+                                className={`font-black text-base leading-tight mb-0.5 line-clamp-1 ${isCancelled ? "text-slate-400" : "text-white"}`}
                               >
-                                {app.client_name}
+                                {safeName}
                               </p>
                               <p className="text-[10px] font-bold text-slate-500 mb-2 font-mono">
-                                📞 {app.client_phone || "-"}
+                                📞 {safePhone}
                               </p>
                               <p className="text-xs font-medium text-slate-300 line-clamp-1">
-                                {app.service_name}
+                                {safeService}
                               </p>
                             </div>
-                            <p className="text-xs font-black text-cyan-400 bg-cyan-500/10 px-2 py-1 rounded-lg border border-cyan-500/20 shadow-inner">
-                              {app.price} RON
+                            <p className="text-xs font-black text-cyan-400 bg-cyan-500/10 px-2 py-1 rounded-lg border border-cyan-500/20 shadow-inner shrink-0">
+                              {app.price || 0} RON
                             </p>
                           </div>
 
@@ -672,8 +567,8 @@ export default function CalendarGridPage() {
                                   setRescheduleData({
                                     id: app.id,
                                     date: app.appointment_date,
-                                    time: app.appointment_time.slice(0, 5),
-                                    name: app.client_name,
+                                    time: safeTime,
+                                    name: safeName,
                                   })
                                 }
                                 className="cursor-pointer flex-1 py-1.5 rounded-xl bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 transition-colors shadow-sm"
@@ -727,9 +622,7 @@ export default function CalendarGridPage() {
 
                             {isCancelled && (
                               <button
-                                onClick={() =>
-                                  triggerDelete(app.id, app.client_name)
-                                }
+                                onClick={() => triggerDelete(app.id, safeName)}
                                 className="cursor-pointer flex-1 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors shadow-sm border border-red-500/20"
                                 title="Șterge definitiv"
                               >
@@ -763,7 +656,6 @@ export default function CalendarGridPage() {
 
       {/* ================= MODALE CENTRALE ================= */}
 
-      {/* Modal Alertă */}
       {activeModal === "alert" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
           <div
@@ -835,7 +727,6 @@ export default function CalendarGridPage() {
         </div>
       )}
 
-      {/* Modal Confirmare (Ștergere Definitivă) */}
       {activeModal === "confirm" && (
         <div
           className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in`}
