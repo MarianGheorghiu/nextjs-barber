@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
+
 import {
   getAvailableBarbersAction,
   getBarberDetailsAction,
@@ -24,7 +26,7 @@ const generateTimeSlots = () => {
 };
 const TIME_SLOTS = generateTimeSlots();
 
-export default function ClientDashboardPage() {
+function ClientPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
@@ -1015,5 +1017,19 @@ export default function ClientDashboardPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function ClientPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-screen items-center justify-center bg-[#000428]">
+          <div className="w-12 h-12 border-4 border-cyan-400 border-t-transparent rounded-full animate-spin shadow-[0_0_15px_rgba(34,211,238,0.5)]"></div>
+        </div>
+      }
+    >
+      <ClientPageContent />
+    </Suspense>
   );
 }
