@@ -64,8 +64,37 @@ export default function AdminDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const fetchDashboardData = async () => {
-    setLoading(true);
+  // ================= REALTIME SYNC PENTRU ADMIN =================
+  useEffect(() => {
+    const supabase = createClient();
+
+    // Ascultăm modificările atât pe profiluri (angajați/clienți noi) cât și pe programări (pentru încasări)
+    const channel = supabase
+      .channel("realtime-admin-dashboard")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "profiles" },
+        () => {
+          fetchDashboardData(false); // Refresh tăcut
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "appointments" },
+        () => {
+          fetchDashboardData(false); // Refresh tăcut
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const fetchDashboardData = async (showLoader = true) => {
+    if (showLoader) setLoading(true);
     const supabase = createClient();
     const {
       data: { user },
@@ -132,7 +161,7 @@ export default function AdminDashboard() {
         })),
       );
     }
-    setLoading(false);
+    if (showLoader) setLoading(false);
   };
 
   const closeModal = () => {
@@ -255,7 +284,7 @@ export default function AdminDashboard() {
             Prezentare Generală
           </h1>
           <p className="text-slate-400 text-sm font-medium">
-            Centrul de comandă administrativ.
+            Centrul de comandă administrativ. Toate statisticile sunt live.
           </p>
         </div>
         <button
@@ -373,9 +402,7 @@ export default function AdminDashboard() {
 
       {/* TABEL CENTRAL LIQUID GLASS SPATIOS */}
       <div className="bg-white/5 backdrop-blur-2xl border border-white/20 rounded-[2.5rem] p-6 sm:p-8 shadow-2xl flex flex-col relative overflow-hidden">
-        {/* Linia superioară de gradient */}
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-500/50 via-purple-500/50 to-cyan-500/50"></div>
-        {/* Glow ambient în colțul tabelului */}
         <div className="absolute -top-10 -right-10 w-64 h-64 bg-cyan-500/10 rounded-full blur-[80px] pointer-events-none"></div>
 
         <div className="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shrink-0 relative z-10">
@@ -445,7 +472,7 @@ export default function AdminDashboard() {
             </p>
           </div>
         ) : (
-          <div className="overflow-auto relative z-10 custom-scrollbar max-h-[500px] rounded-2xl border border-white/10 bg-black/20">
+          <div className="overflow-auto relative z-10 custom-scrollbar max-h-[500px] rounded-2xl border border-white/10 bg-black/20 shadow-inner">
             <table className="w-full text-left border-collapse min-w-[800px]">
               <thead className="sticky top-0 z-20 bg-[#050505]/95 backdrop-blur-xl border-b border-white/10 shadow-sm">
                 <tr className="text-slate-300 text-xs uppercase tracking-widest font-black">

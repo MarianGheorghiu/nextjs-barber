@@ -128,7 +128,7 @@ export default function BarberClientsPage() {
     setActiveModal("confirm");
   };
 
-  // Logica de Căutare (Filtrare instantanee)
+  // Logica de Căutare
   const filteredClients = clients.filter(
     (c) =>
       c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -153,31 +153,29 @@ export default function BarberClientsPage() {
 
   return (
     <div className="animate-fade-in max-w-6xl mx-auto pb-10 relative">
-      {/* HEADER */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 mb-10">
-        <div>
-          <h1 className="text-3xl sm:text-4xl font-black text-white mb-2 tracking-tight">
-            Clienții Mei
-          </h1>
-          <p className="text-slate-400 text-sm font-medium">
-            Agenda ta permanentă. Clienții apar aici automat când le confirmi o
-            programare.
-          </p>
-        </div>
+      {/* HEADER COMPACT */}
+      <div className="mb-6">
+        <h1 className="text-2xl sm:text-3xl font-black text-white mb-1 tracking-tight">
+          Clienții Mei
+        </h1>
+        <p className="text-slate-400 text-sm font-medium">
+          Agenda ta permanentă. Clienții apar aici automat când le confirmi o
+          programare.
+        </p>
       </div>
 
-      {/* 3 PANOURI STATISTICI LIQUID GLASS */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
+      {/* 3 PANOURI STATISTICI LIQUID GLASS - COMPACTE */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         {/* Panou Total */}
-        <div className="bg-white/5 backdrop-blur-xl border border-white/20 p-6 rounded-[2rem] relative overflow-hidden group shadow-xl flex flex-col justify-center">
-          <div className="absolute -right-6 -top-6 w-32 h-32 bg-cyan-500/10 rounded-full blur-[40px] pointer-events-none group-hover:bg-cyan-500/20 transition-all"></div>
-          <div className="relative z-10 flex justify-between items-start mb-2">
+        <div className="bg-white/5 backdrop-blur-md border border-white/10 p-5 rounded-2xl relative overflow-hidden group shadow-lg flex flex-col justify-center">
+          <div className="absolute -right-4 -top-4 w-24 h-24 bg-cyan-500/10 rounded-full blur-[30px] pointer-events-none group-hover:bg-cyan-500/20 transition-all"></div>
+          <div className="relative z-10 flex justify-between items-start mb-1">
             <h3 className="text-cyan-400/90 text-[10px] font-black uppercase tracking-widest">
               Total Agendă
             </h3>
-            <div className="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20 text-cyan-400 shadow-inner">
+            <div className="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20 text-cyan-400 shadow-inner">
               <svg
-                className="w-5 h-5"
+                className="w-4 h-4"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -191,26 +189,26 @@ export default function BarberClientsPage() {
               </svg>
             </div>
           </div>
-          <div className="flex items-end gap-3 relative z-10">
-            <span className="text-5xl font-black text-white leading-none">
+          <div className="flex items-end gap-2 relative z-10">
+            <span className="text-4xl font-black text-white leading-none">
               {totalClients}
             </span>
-            <span className="text-slate-400 text-sm font-medium mb-1">
-              clienți înregistrați
+            <span className="text-slate-400 text-xs font-medium mb-0.5">
+              clienți
             </span>
           </div>
         </div>
 
         {/* Panou Activi */}
-        <div className="bg-white/5 backdrop-blur-xl border border-white/20 p-6 rounded-[2rem] relative overflow-hidden group shadow-xl flex flex-col justify-center">
-          <div className="absolute -right-6 -top-6 w-32 h-32 bg-green-500/10 rounded-full blur-[40px] pointer-events-none group-hover:bg-green-500/20 transition-all"></div>
-          <div className="relative z-10 flex justify-between items-start mb-2">
+        <div className="bg-white/5 backdrop-blur-md border border-white/10 p-5 rounded-2xl relative overflow-hidden group shadow-lg flex flex-col justify-center">
+          <div className="absolute -right-4 -top-4 w-24 h-24 bg-green-500/10 rounded-full blur-[30px] pointer-events-none group-hover:bg-green-500/20 transition-all"></div>
+          <div className="relative z-10 flex justify-between items-start mb-1">
             <h3 className="text-green-400/90 text-[10px] font-black uppercase tracking-widest">
-              Clienți Activi
+              Activi
             </h3>
-            <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center border border-green-500/20 text-green-400 shadow-inner">
+            <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center border border-green-500/20 text-green-400 shadow-inner">
               <svg
-                className="w-5 h-5"
+                className="w-4 h-4"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -224,26 +222,26 @@ export default function BarberClientsPage() {
               </svg>
             </div>
           </div>
-          <div className="flex items-end gap-3 relative z-10">
-            <span className="text-5xl font-black text-green-400 leading-none">
+          <div className="flex items-end gap-2 relative z-10">
+            <span className="text-4xl font-black text-green-400 leading-none">
               {activeClients}
             </span>
-            <span className="text-slate-400 text-sm font-medium mb-1">
-              cu acces la rezervări
+            <span className="text-slate-400 text-xs font-medium mb-0.5">
+              cu acces
             </span>
           </div>
         </div>
 
         {/* Panou Blocați */}
-        <div className="bg-white/5 backdrop-blur-xl border border-white/20 p-6 rounded-[2rem] relative overflow-hidden group shadow-xl flex flex-col justify-center">
-          <div className="absolute -right-6 -top-6 w-32 h-32 bg-red-500/10 rounded-full blur-[40px] pointer-events-none group-hover:bg-red-500/20 transition-all"></div>
-          <div className="relative z-10 flex justify-between items-start mb-2">
+        <div className="bg-white/5 backdrop-blur-md border border-white/10 p-5 rounded-2xl relative overflow-hidden group shadow-lg flex flex-col justify-center">
+          <div className="absolute -right-4 -top-4 w-24 h-24 bg-red-500/10 rounded-full blur-[30px] pointer-events-none group-hover:bg-red-500/20 transition-all"></div>
+          <div className="relative z-10 flex justify-between items-start mb-1">
             <h3 className="text-red-400/90 text-[10px] font-black uppercase tracking-widest">
-              Clienți Blocați (Banned)
+              Blocați (Banned)
             </h3>
-            <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center border border-red-500/20 text-red-400 shadow-inner">
+            <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center border border-red-500/20 text-red-400 shadow-inner">
               <svg
-                className="w-5 h-5"
+                className="w-4 h-4"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -257,29 +255,29 @@ export default function BarberClientsPage() {
               </svg>
             </div>
           </div>
-          <div className="flex items-end gap-3 relative z-10">
-            <span className="text-5xl font-black text-red-400 leading-none">
+          <div className="flex items-end gap-2 relative z-10">
+            <span className="text-4xl font-black text-red-400 leading-none">
               {blockedClients}
             </span>
-            <span className="text-slate-400 text-sm font-medium mb-1">
-              interziși pe platformă
+            <span className="text-slate-400 text-xs font-medium mb-0.5">
+              interziși
             </span>
           </div>
         </div>
       </div>
 
       {/* CONTAINER TABEL LIQUID GLASS PREMIUM */}
-      <div className="bg-white/5 backdrop-blur-2xl border border-white/20 rounded-[2.5rem] p-6 sm:p-8 shadow-2xl relative flex flex-col overflow-hidden">
+      <div className="bg-white/5 backdrop-blur-2xl border border-white/20 rounded-[2rem] p-6 shadow-2xl relative flex flex-col overflow-hidden">
         {/* Glow luminos fundal container tabel */}
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-500/40 via-purple-500/40 to-cyan-500/40"></div>
-        <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/10 rounded-full blur-[100px] pointer-events-none"></div>
+        <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-cyan-500/40 via-purple-500/40 to-cyan-500/40"></div>
+        <div className="absolute top-0 right-0 w-48 h-48 bg-cyan-500/10 rounded-full blur-[80px] pointer-events-none"></div>
 
         {/* SEARCH BAR & TITLU */}
-        <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 relative z-10 shrink-0">
-          <h3 className="text-xl font-black text-white flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20 text-cyan-400 shadow-inner">
+        <div className="mb-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 relative z-10 shrink-0">
+          <h3 className="text-lg font-black text-white flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center border border-cyan-500/20 text-cyan-400 shadow-inner shrink-0">
               <svg
-                className="w-5 h-5"
+                className="w-4 h-4"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -292,12 +290,12 @@ export default function BarberClientsPage() {
                 />
               </svg>
             </div>
-            Registru Clienți
+            Registru
           </h3>
           <div className="relative w-full sm:w-80">
-            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
               <svg
-                className="w-5 h-5 text-cyan-400"
+                className="w-4 h-4 text-cyan-400"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -315,16 +313,16 @@ export default function BarberClientsPage() {
               placeholder="Caută client sau număr..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-black/40 border border-white/10 focus:border-cyan-400 rounded-2xl pl-11 pr-4 py-3.5 text-white outline-none transition-all shadow-inner placeholder:text-slate-500 font-medium text-sm"
+              className="w-full bg-black/40 border border-white/10 focus:border-cyan-400 rounded-xl pl-9 pr-4 py-2.5 text-white outline-none transition-all shadow-inner placeholder:text-slate-500 font-medium text-sm"
             />
           </div>
         </div>
 
         {clients.length === 0 ? (
-          <div className="text-center py-16 relative z-10">
-            <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4 border border-white/10 text-slate-500 shadow-inner">
+          <div className="text-center py-10 relative z-10">
+            <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-3 border border-white/10 text-slate-500 shadow-inner">
               <svg
-                className="w-8 h-8"
+                className="w-6 h-6"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -337,50 +335,50 @@ export default function BarberClientsPage() {
                 />
               </svg>
             </div>
-            <p className="text-white font-black text-2xl tracking-tight mb-2">
+            <p className="text-white font-black text-xl tracking-tight mb-1">
               Agenda ta este goală.
             </p>
-            <p className="text-sm text-slate-400 font-medium">
+            <p className="text-xs text-slate-400 font-medium">
               Apasă pe butonul "Confirmă" de la prima ta programare, iar datele
-              clientului vor fi salvate automat aici pentru viitor.
+              clientului vor fi salvate automat aici.
             </p>
           </div>
         ) : filteredClients.length === 0 ? (
-          <div className="text-center py-12 text-slate-400 font-medium italic relative z-10">
+          <div className="text-center py-8 text-slate-400 font-medium italic relative z-10 text-sm">
             Nu a fost găsit niciun client conform căutării.
           </div>
         ) : (
-          <div className="overflow-auto custom-scrollbar max-h-[600px] rounded-2xl border border-white/10 bg-black/20 relative z-10 shadow-inner">
+          <div className="overflow-auto custom-scrollbar max-h-[500px] rounded-xl border border-white/10 bg-black/20 relative z-10 shadow-inner">
             <table className="w-full text-left border-collapse min-w-[700px]">
-              <thead className="sticky top-0 z-20 bg-[#050505]/95 backdrop-blur-xl border-b border-white/20 shadow-sm">
+              <thead className="sticky top-0 z-20 bg-[#0a0a0a]/95 backdrop-blur-md border-b border-white/20 shadow-sm">
                 <tr className="text-slate-300 text-[10px] uppercase tracking-widest font-black">
-                  <th className="py-4 pl-6">Nume Client</th>
-                  <th className="py-4">Telefon Contact</th>
-                  <th className="py-4 text-center">Status Cont</th>
-                  <th className="py-4 text-right pr-6">Acțiuni Operative</th>
+                  <th className="py-3 pl-4">Nume Client</th>
+                  <th className="py-3">Telefon Contact</th>
+                  <th className="py-3 text-center">Status Cont</th>
+                  <th className="py-3 text-right pr-4">Acțiuni Operative</th>
                 </tr>
               </thead>
-              <tbody className="text-white text-base">
+              <tbody className="text-white text-sm">
                 {filteredClients.map((client) => {
                   const isActive = client.status === "active";
 
                   return (
                     <tr
                       key={client.id}
-                      className={`border-b border-white/5 transition-colors group ${!isActive ? "bg-red-500/[0.02] hover:bg-red-500/[0.05]" : "hover:bg-white/5"}`}
+                      className={`border-b border-white/5 transition-colors group ${!isActive ? "bg-red-500/[0.02] hover:bg-red-500/[0.04]" : "hover:bg-white/5"}`}
                     >
                       {/* Nume */}
-                      <td className="py-6 pl-6 align-middle">
-                        <div className="flex items-center gap-4">
+                      <td className="py-4 pl-4 align-middle">
+                        <div className="flex items-center gap-3">
                           <div
-                            className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-lg border shrink-0 shadow-inner ${isActive ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/30" : "bg-red-500/10 text-red-400 border-red-500/30"}`}
+                            className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-base border shrink-0 shadow-inner ${isActive ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/30" : "bg-red-500/10 text-red-400 border-red-500/30"}`}
                           >
                             {client.name
                               ? client.name.charAt(0).toUpperCase()
                               : "?"}
                           </div>
                           <p
-                            className={`font-black text-lg tracking-tight ${!isActive ? "text-red-400" : "text-white"}`}
+                            className={`font-black text-base tracking-tight ${!isActive ? "text-red-400" : "text-white"}`}
                           >
                             {client.name}
                           </p>
@@ -388,34 +386,34 @@ export default function BarberClientsPage() {
                       </td>
 
                       {/* Telefon */}
-                      <td className="py-6 align-middle font-mono font-bold text-cyan-400">
+                      <td className="py-4 align-middle font-mono font-bold text-cyan-400">
                         {client.phone || "Lipsă"}
                       </td>
 
                       {/* Status */}
-                      <td className="py-6 text-center align-middle">
+                      <td className="py-4 text-center align-middle">
                         {isActive ? (
-                          <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-green-500/10 text-green-400 border border-green-500/30 text-[10px] font-black uppercase tracking-wider shadow-sm">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-green-500/10 text-green-400 border border-green-500/30 text-[10px] font-black uppercase tracking-wider shadow-sm">
                             <span className="w-1.5 h-1.5 rounded-full bg-green-400 shadow-[0_0_8px_rgba(34,197,94,0.8)]"></span>
                             Activ
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 text-red-400 border border-red-500/30 text-[10px] font-black uppercase tracking-wider shadow-[0_0_10px_rgba(239,68,68,0.1)]">
-                            <span className="text-[11px] leading-none">🚫</span>{" "}
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-500/10 text-red-400 border border-red-500/30 text-[10px] font-black uppercase tracking-wider shadow-[0_0_10px_rgba(239,68,68,0.1)]">
+                            <span className="text-[10px] leading-none">🚫</span>{" "}
                             Interzis
                           </span>
                         )}
                       </td>
 
                       {/* Acțiuni */}
-                      <td className="py-6 text-right pr-6 align-middle">
-                        <div className="flex justify-end gap-2.5 items-center">
+                      <td className="py-4 text-right pr-4 align-middle">
+                        <div className="flex justify-end gap-2 items-center">
                           <button
                             onClick={() =>
                               handleToggleStatus(client.id, client.status)
                             }
                             disabled={isProcessing}
-                            className={`cursor-pointer px-5 py-2.5 rounded-xl transition-all text-xs font-black flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 border ${isActive ? "bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border-orange-500/30 hover:border-orange-500/50" : "bg-green-500/10 hover:bg-green-500/20 text-green-400 border-green-500/30 hover:border-green-500/50"}`}
+                            className={`cursor-pointer px-4 py-2 rounded-lg transition-all text-[10px] font-black flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50 border uppercase tracking-wider ${isActive ? "bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border-orange-500/30 hover:border-orange-500/50" : "bg-green-500/10 hover:bg-green-500/20 text-green-400 border-green-500/30 hover:border-green-500/50"}`}
                             title={
                               isActive
                                 ? "Blochează Clientul"
@@ -424,17 +422,12 @@ export default function BarberClientsPage() {
                           >
                             {isActive ? (
                               <>
-                                🚫{" "}
-                                <span className="hidden sm:inline">
-                                  Ban/Block
-                                </span>
+                                🚫 <span className="hidden sm:inline">Ban</span>
                               </>
                             ) : (
                               <>
                                 ✅{" "}
-                                <span className="hidden sm:inline">
-                                  Deblochează
-                                </span>
+                                <span className="hidden sm:inline">Unban</span>
                               </>
                             )}
                           </button>
@@ -442,11 +435,11 @@ export default function BarberClientsPage() {
                           <button
                             onClick={() => handleDelete(client.id, client.name)}
                             disabled={isProcessing}
-                            className="cursor-pointer w-10 h-10 rounded-xl bg-white/5 hover:bg-red-500/20 text-slate-400 hover:text-red-400 border border-white/10 hover:border-red-500/30 transition-all flex items-center justify-center shadow-sm disabled:opacity-50"
+                            className="cursor-pointer w-8 h-8 rounded-lg bg-white/5 hover:bg-red-500/20 text-slate-400 hover:text-red-400 border border-white/10 hover:border-red-500/30 transition-all flex items-center justify-center shadow-sm disabled:opacity-50"
                             title="Șterge din agendă"
                           >
                             <svg
-                              className="w-5 h-5"
+                              className="w-4 h-4"
                               fill="none"
                               stroke="currentColor"
                               viewBox="0 0 24 24"
@@ -471,20 +464,19 @@ export default function BarberClientsPage() {
       </div>
 
       {/* ================= MODALE CENTRALE ================= */}
-
       {/* Modal Alertă (Success/Error) */}
       {activeModal === "alert" && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
           <div
-            className={`w-full max-w-sm bg-[#050505]/95 backdrop-blur-2xl border p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden ${modalConfig.type === "error" ? "border-red-500/30" : modalConfig.type === "success" ? "border-green-500/30" : "border-cyan-500/30"}`}
+            className={`w-full max-w-xs bg-[#050505]/95 backdrop-blur-xl border p-6 rounded-2xl shadow-2xl relative overflow-hidden ${modalConfig.type === "error" ? "border-red-500/30" : modalConfig.type === "success" ? "border-green-500/30" : "border-cyan-500/30"}`}
           >
             <div className="absolute top-0 left-0 w-full h-1 bg-white/10"></div>
             <div
-              className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 border-4 shadow-inner relative z-10 ${modalConfig.type === "error" ? "bg-red-500/10 border-red-500/20 text-red-400" : modalConfig.type === "success" ? "bg-green-500/10 border-green-500/20 text-green-400" : "bg-cyan-500/10 border-cyan-500/20 text-cyan-400"}`}
+              className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 border-2 shadow-inner relative z-10 ${modalConfig.type === "error" ? "bg-red-500/10 border-red-500/20 text-red-400" : modalConfig.type === "success" ? "bg-green-500/10 border-green-500/20 text-green-400" : "bg-cyan-500/10 border-cyan-500/20 text-cyan-400"}`}
             >
               {modalConfig.type === "error" && (
                 <svg
-                  className="w-8 h-8"
+                  className="w-6 h-6"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -499,7 +491,7 @@ export default function BarberClientsPage() {
               )}
               {modalConfig.type === "success" && (
                 <svg
-                  className="w-8 h-8"
+                  className="w-6 h-6"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -514,7 +506,7 @@ export default function BarberClientsPage() {
               )}
               {modalConfig.type === "info" && (
                 <svg
-                  className="w-8 h-8"
+                  className="w-6 h-6"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -528,15 +520,15 @@ export default function BarberClientsPage() {
                 </svg>
               )}
             </div>
-            <h2 className="text-xl font-black text-white mb-2 text-center tracking-tight relative z-10">
+            <h2 className="text-lg font-black text-white mb-2 text-center tracking-tight relative z-10">
               {modalConfig.title}
             </h2>
-            <p className="text-slate-300 text-sm mb-8 text-center font-medium leading-relaxed relative z-10">
+            <p className="text-slate-300 text-xs mb-6 text-center font-medium leading-relaxed relative z-10">
               {modalConfig.message}
             </p>
             <button
               onClick={() => setActiveModal("none")}
-              className={`w-full py-3.5 rounded-xl font-black transition-all cursor-pointer shadow-lg relative z-10 text-[#0a0a0a] ${modalConfig.type === "error" ? "bg-red-500 hover:bg-red-400" : modalConfig.type === "success" ? "bg-green-500 hover:bg-green-400" : "bg-cyan-500 hover:bg-cyan-400"}`}
+              className={`w-full py-2.5 rounded-xl font-black transition-all cursor-pointer shadow-md relative z-10 text-[#0a0a0a] text-xs ${modalConfig.type === "error" ? "bg-red-500 hover:bg-red-400" : modalConfig.type === "success" ? "bg-green-500 hover:bg-green-400" : "bg-cyan-500 hover:bg-cyan-400"}`}
             >
               Am înțeles
             </button>
@@ -550,14 +542,14 @@ export default function BarberClientsPage() {
           className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in`}
         >
           <div
-            className={`w-full max-w-sm bg-[#050505]/95 backdrop-blur-2xl border p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden ${confirmConfig.buttonColor === "red" ? "border-red-500/30" : "border-cyan-500/30"}`}
+            className={`w-full max-w-xs bg-[#050505]/95 backdrop-blur-xl border p-6 rounded-2xl shadow-2xl relative overflow-hidden ${confirmConfig.buttonColor === "red" ? "border-red-500/30" : "border-cyan-500/30"}`}
           >
             <div className="absolute top-0 left-0 w-full h-1 bg-white/10"></div>
             <div
-              className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 border-4 shadow-inner relative z-10 ${confirmConfig.buttonColor === "red" ? "bg-red-500/10 border-red-500/20 text-red-400" : "bg-cyan-500/10 border-cyan-500/20 text-cyan-400"}`}
+              className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 border-2 shadow-inner relative z-10 ${confirmConfig.buttonColor === "red" ? "bg-red-500/10 border-red-500/20 text-red-400" : "bg-cyan-500/10 border-cyan-500/20 text-cyan-400"}`}
             >
               <svg
-                className="w-8 h-8"
+                className="w-6 h-6"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -570,23 +562,23 @@ export default function BarberClientsPage() {
                 />
               </svg>
             </div>
-            <h2 className="text-xl font-black text-white mb-2 text-center tracking-tight relative z-10">
+            <h2 className="text-lg font-black text-white mb-2 text-center tracking-tight relative z-10">
               {confirmConfig.title}
             </h2>
-            <p className="text-slate-300 text-sm mb-8 text-center font-medium leading-relaxed relative z-10">
+            <p className="text-slate-300 text-xs mb-6 text-center font-medium leading-relaxed relative z-10">
               {confirmConfig.message}
             </p>
-            <div className="flex gap-3 relative z-10">
+            <div className="flex gap-2 relative z-10">
               <button
                 onClick={() => setActiveModal("none")}
-                className="flex-1 py-3.5 rounded-xl bg-white/5 border border-white/10 text-slate-300 text-sm font-bold hover:bg-white/10 transition-all cursor-pointer shadow-sm"
+                className="flex-1 py-2.5 rounded-xl bg-white/5 border border-white/10 text-slate-300 text-xs font-bold hover:bg-white/10 transition-all cursor-pointer shadow-sm"
               >
                 Renunță
               </button>
               <button
                 onClick={confirmConfig.action}
                 disabled={isProcessing}
-                className={`flex-1 py-3.5 rounded-xl text-[#0a0a0a] text-sm font-black transition-all cursor-pointer disabled:opacity-50 shadow-lg ${confirmConfig.buttonColor === "red" ? "bg-red-500 hover:bg-red-400 shadow-[0_0_15px_rgba(239,68,68,0.4)]" : "bg-cyan-500 hover:bg-cyan-400"}`}
+                className={`flex-1 py-2.5 rounded-xl text-[#0a0a0a] text-xs font-black transition-all cursor-pointer disabled:opacity-50 shadow-md ${confirmConfig.buttonColor === "red" ? "bg-red-500 hover:bg-red-400" : "bg-cyan-500 hover:bg-cyan-400"}`}
               >
                 {isProcessing ? "..." : confirmConfig.buttonText}
               </button>

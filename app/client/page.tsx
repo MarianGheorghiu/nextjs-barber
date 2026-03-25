@@ -41,7 +41,7 @@ function ClientPageContent() {
 
   // State Alertă Anulare de către Frizer
   const [barberCancelledAlert, setBarberCancelledAlert] = useState(false);
-  const isClientCancelling = useRef(false); // Memorează dacă clientul a apăsat butonul de anulare
+  const isClientCancelling = useRef(false);
 
   // Flow State
   const [barbers, setBarbers] = useState<any[]>([]);
@@ -96,8 +96,6 @@ function ClientPageContent() {
     if (activeResult.success && activeResult.appointment) {
       setActiveAppointment(activeResult.appointment);
     } else {
-      // Dacă aveam o programare activă și a dispărut (și nu clientul a anulat-o) -> Frizerul a anulat!
-      // Am adăugat ": any" aici pentru a scăpa de eroarea TypeScript
       setActiveAppointment((prev: any) => {
         if (prev && !isClientCancelling.current) {
           setBarberCancelledAlert(true);
@@ -222,7 +220,6 @@ function ClientPageContent() {
     setIsSubmitting(false);
   };
 
-  // --- ACȚIUNI MODAL ---
   const triggerCancelModal = () => {
     setModalMessage(
       "Ești sigur că vrei să anulezi programarea? Locul tău va fi eliberat imediat.",
@@ -233,7 +230,7 @@ function ClientPageContent() {
   const confirmCancelAppointment = async () => {
     setLoading(true);
     setActiveModal("none");
-    isClientCancelling.current = true; // Spunem aplicației că noi am anulat intenționat
+    isClientCancelling.current = true;
     const result = await cancelClientAppointmentAction(activeAppointment.id);
 
     if (result.success) {
@@ -241,7 +238,7 @@ function ClientPageContent() {
       setBarberCancelledAlert(false);
       await initPage();
     }
-    isClientCancelling.current = false; // Resetăm scutul
+    isClientCancelling.current = false;
   };
 
   const handleAcceptReschedule = async () => {
@@ -977,12 +974,12 @@ function ClientPageContent() {
         </div>
       )}
 
-      {/* STEP 4: Rezumat Premium */}
+      {/* STEP 4: Rezumat Premium COMPACT (FĂRĂ SCROLL) */}
       {step === 4 && (
         <div className="animate-fade-in">
           <button
             onClick={() => setStep(3)}
-            className="cursor-pointer text-slate-400 hover:text-cyan-400 text-[10px] font-black uppercase tracking-widest mb-8 flex items-center gap-2 transition-colors w-max px-4 py-2.5 rounded-xl hover:bg-white/5 border border-transparent hover:border-white/10 shadow-sm"
+            className="cursor-pointer text-slate-400 hover:text-cyan-400 text-[10px] font-black uppercase tracking-widest mb-6 flex items-center gap-2 transition-colors w-max px-3 py-2 rounded-lg hover:bg-white/5 border border-transparent hover:border-white/10 shadow-sm"
           >
             <svg
               className="w-4 h-4"
@@ -1000,70 +997,83 @@ function ClientPageContent() {
             Înapoi la Calendar
           </button>
 
-          <h2 className="text-2xl font-black text-white mb-8 tracking-tight">
+          <h2 className="text-2xl font-black text-white mb-6 tracking-tight">
             Rezumat Final
           </h2>
 
-          <div className="bg-white/5 backdrop-blur-2xl border border-white/20 p-8 sm:p-12 rounded-[3rem] mb-10 relative overflow-hidden shadow-2xl">
+          <div className="bg-white/5 backdrop-blur-2xl border border-white/20 p-6 sm:p-8 rounded-[2rem] mb-6 relative overflow-hidden shadow-2xl">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-cyan-500/50 via-purple-500/50 to-cyan-500/50"></div>
-            <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/10 rounded-full blur-[100px] pointer-events-none"></div>
+            <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/10 rounded-full blur-[80px] pointer-events-none"></div>
 
-            <div className="relative z-10 space-y-10">
-              <div className="flex items-center justify-between border-b border-white/10 pb-10">
-                <div>
-                  <p className="text-[10px] text-cyan-400 uppercase font-black tracking-widest mb-2">
-                    Locație & Frizer
-                  </p>
-                  <p className="text-3xl text-white font-black tracking-tight">
-                    {selectedBarber.barbershop_name ||
-                      selectedBarber.first_name}
-                  </p>
+            <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Detalii Locație & Serviciu */}
+              <div className="space-y-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-cyan-500/10 rounded-xl flex items-center justify-center border border-cyan-500/30 text-2xl shadow-inner shrink-0">
+                    📍
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-cyan-400 uppercase font-black tracking-widest mb-1">
+                      Frizer
+                    </p>
+                    <p className="text-xl text-white font-black tracking-tight">
+                      {selectedBarber.barbershop_name ||
+                        selectedBarber.first_name}
+                    </p>
+                  </div>
                 </div>
-                <div className="w-16 h-16 bg-cyan-500/10 rounded-2xl flex items-center justify-center border border-cyan-500/30 text-3xl shadow-inner shrink-0">
-                  📍
+
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-cyan-500/10 rounded-xl flex items-center justify-center border border-cyan-500/30 text-2xl shadow-inner shrink-0">
+                    ✂️
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-cyan-400 uppercase font-black tracking-widest mb-1">
+                      Serviciu Ales
+                    </p>
+                    <p className="text-lg text-white font-black tracking-tight">
+                      {selectedService.name}
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between border-b border-white/10 pb-10">
-                <div>
-                  <p className="text-[10px] text-cyan-400 uppercase font-black tracking-widest mb-2">
-                    Data & Ora Rezervării
-                  </p>
-                  <p className="text-3xl text-white font-black capitalize tracking-tight mb-2">
-                    {new Date(selectedDate).toLocaleDateString("ro-RO", {
-                      weekday: "long",
-                      day: "numeric",
-                      month: "long",
-                    })}
-                  </p>
-                  <p className="text-cyan-400 font-mono font-black text-3xl tracking-tighter">
-                    La ora {selectedTime}
-                  </p>
+              {/* Data & Ora + Preț */}
+              <div className="space-y-6">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-cyan-500/10 rounded-xl flex items-center justify-center border border-cyan-500/30 text-2xl shadow-inner shrink-0">
+                    ⏰
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-cyan-400 uppercase font-black tracking-widest mb-1">
+                      Data & Ora
+                    </p>
+                    <p className="text-lg text-white font-bold capitalize">
+                      {new Date(selectedDate).toLocaleDateString("ro-RO", {
+                        weekday: "short",
+                        day: "numeric",
+                        month: "short",
+                      })}{" "}
+                      <span className="mx-2 text-slate-500">•</span>
+                      <span className="text-cyan-400 font-mono font-black">
+                        {selectedTime}
+                      </span>
+                    </p>
+                  </div>
                 </div>
-                <div className="w-16 h-16 bg-cyan-500/10 rounded-2xl flex items-center justify-center border border-cyan-500/30 text-3xl shadow-inner shrink-0">
-                  ⏰
-                </div>
-              </div>
 
-              <div className="flex flex-col md:flex-row items-start md:items-center justify-between pt-4 gap-8">
-                <div>
-                  <p className="text-[10px] text-cyan-400 uppercase font-black tracking-widest mb-2">
-                    Serviciu Ales
-                  </p>
-                  <p className="text-3xl text-white font-black tracking-tight mb-2">
-                    {selectedService.name}
-                  </p>
-                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest bg-white/5 px-3 py-1.5 rounded-lg border border-white/10 inline-block">
-                    Plata se face în locație (CASH/CARD)
-                  </p>
-                </div>
-                <div className="w-full md:w-auto text-center md:text-right bg-black/40 px-8 py-6 rounded-[2rem] border border-white/10 shadow-inner">
-                  <p className="text-[10px] text-cyan-400/80 uppercase font-black tracking-widest mb-1">
-                    Total de Plată
-                  </p>
-                  <p className="text-5xl font-black text-cyan-400">
+                <div className="bg-black/40 px-5 py-3 rounded-xl border border-white/10 shadow-inner flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] text-cyan-400/80 uppercase font-black tracking-widest mb-0.5">
+                      Total de Plată
+                    </p>
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                      Achitare în locație
+                    </p>
+                  </div>
+                  <p className="text-3xl font-black text-cyan-400">
                     {selectedService.price}{" "}
-                    <span className="text-xl text-cyan-500/70 tracking-widest uppercase">
+                    <span className="text-sm text-cyan-500/70 tracking-widest uppercase">
                       RON
                     </span>
                   </p>
@@ -1076,10 +1086,10 @@ function ClientPageContent() {
             <button
               onClick={handleBookAppointment}
               disabled={isSubmitting}
-              className="cursor-pointer w-full sm:w-auto bg-cyan-500 hover:bg-cyan-400 text-[#000428] font-black px-12 py-5 rounded-2xl transition-all shadow-[0_0_25px_rgba(34,211,238,0.4)] hover:shadow-[0_0_40px_rgba(34,211,238,0.6)] disabled:opacity-50 text-xl flex items-center justify-center gap-3 hover:scale-[1.02]"
+              className="cursor-pointer w-full bg-cyan-500 hover:bg-cyan-400 text-[#000428] font-black px-10 py-4 rounded-xl transition-all shadow-[0_0_20px_rgba(34,211,238,0.4)] hover:shadow-[0_0_30px_rgba(34,211,238,0.6)] disabled:opacity-50 text-lg flex items-center justify-center gap-3 hover:scale-[1.02]"
             >
               {isSubmitting ? (
-                <span className="w-6 h-6 border-4 border-[#000428] border-t-transparent rounded-full animate-spin"></span>
+                <span className="w-5 h-5 border-4 border-[#000428] border-t-transparent rounded-full animate-spin"></span>
               ) : (
                 "Confirmă Rezervarea"
               )}
