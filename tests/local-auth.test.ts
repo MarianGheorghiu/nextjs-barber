@@ -1,0 +1,34 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { localLogin, localRegister, localSession, localSignOut } from '../src/lib/local-auth.ts';
+import { readDemo } from '../src/lib/demo.ts';
+
+test('contul local al lui Cristi este separat de înscrierea clienților, iar parolele nu se păstrează în clar', async () => {
+  const storage = new Map<string, string>([['cristi.local.accounts.v1', JSON.stringify([{ id: 'demo-barber', email: 'cristi@demo.test', salt: 'old-salt', digest: 'old-digest' }])]]);
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem: (key: string) => storage.get(key) ?? null, setItem: (key: string, value: string) => storage.set(key, value), removeItem: (key: string) => storage.delete(key) } });
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: new EventTarget() });
+  assert.equal(localSession(), null);
+  const owner = await localLogin('cristi@barber.com', '1', true);
+  assert.equal(owner.id, 'demo-barber');
+  assert.equal(owner.email, 'cristi@barber.com');
+  assert.equal(JSON.parse(storage.get('cristi.local.accounts.v1')!).filter((a: {id:string})=>a.id==='demo-barber').length,1,'contul existent migrează fără duplicare');
+  await assert.rejects(() => localLogin('cristi@demo.test', 'CristiDemo2026!'), /corecte/);
+  localSignOut();
+  const client = await localRegister({ first_name: 'Client', last_name: 'De Test', phone: '0700000099' }, 'client@example.test', 'ParolaTest2026!');
+  assert.notEqual(client.id, owner.id);
+  assert.equal(localSession()?.id, client.id);
+  assert.ok(readDemo().profiles.find(p => p.id === client.id));
+  localSignOut();
+  await assert.rejects(() => localLogin('client@example.test', 'ParolaTest2026!', true), /cont de client/);
+  assert.equal(localSession(), null, 'zona frizerului nu autentifică un client');
+  await assert.rejects(() => localLogin('client@example.test', 'ParolaGresita!'), /corecte/);
+  await assert.rejects(() => localRegister({ first_name: 'Alt', last_name: 'Client', phone: '0700000098' }, 'client@example.test', 'ParolaTest2026!'), /deja un cont/);
+  const again = await localLogin('client@example.test', 'ParolaTest2026!');
+  assert.equal(again.id, client.id);
+  await assert.rejects(() => localRegister({first_name:'Alt',last_name:'Client',phone:'0700000098'},'nou@example.test','1'), /cel puțin 8/);
+  await assert.rejects(() => localRegister({first_name:'Alt',last_name:'Client',phone:'0700000098'},'cristi@barber.com','ParolaTest2026!'), /deja un cont/);
+  const ownerAgain=await localLogin(' CRISTI@BARBER.COM ', '1');assert.equal(ownerAgain.id,'demo-barber');
+  const accountData = storage.get('cristi.local.accounts.v1')!;
+  assert.equal(accountData.includes('ParolaTest2026!'), false);
+  assert.equal(accountData.includes('CristiDemo2026!'), false);
+});

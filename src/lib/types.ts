@@ -1,0 +1,13 @@
+export type Service = { id: string; barber_id: string; name: string; description: string; duration_minutes: number; price_cents: number; category: string; active: boolean; sort_order: number };
+export type Barber = { id: string; owner_id: string | null; name: string; title: string; shop_name: string; description: string; address: string; phone: string; auto_confirm: boolean; cancellation_hours: number };
+export type Profile = { id: string; barber_id: string; first_name: string; last_name: string; phone: string; created_at?: string };
+export type Status = 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'no_show';
+export type RescheduleProposal = { id: string; starts_at: string; expires_at: string };
+export type Appointment = { id: string; barber_id: string; client_id: string | null; client_name: string; client_phone: string; service_id: string; service_name: string; price_cents: number; starts_at: string; ends_at: string; status: Status; created_at: string; notes: string; cancellation_reason?: string; cancelled_at?: string; reschedule_proposal?: RescheduleProposal | null };
+export type Schedule = { barber_id: string; weekday: number; enabled: boolean; opens: string; closes: string; break_start: string | null; break_end: string | null };
+export type DayOff = { id: string; barber_id: string; date: string; reason: string };
+export type Slot = { starts_at: string; ends_at: string };
+export type View = 'home' | 'appointments' | 'account' | 'clients' | 'settings';
+export type Identity = { id: string; email?: string };
+export type CalendarPolicy = { closedHolidayIds: string[] };
+export type LocalNotification = { id: string; user_id: string; appointment_id: string; title: string; body: string; created_at: string; read_at: string | null };

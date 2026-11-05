@@ -1,73 +1,73 @@
-# ✂️ BarberApp - Premium Salon Management Platform
+# Cristi Barber Shop — prototip UI local
 
-BarberApp este un MVP (Minimum Viable Product) robust și scalabil, creat pentru a digitaliza și eficientiza complet experiența dintr-un salon de frizerie / barbershop.
+În această etapă lucrăm exclusiv la interfață și la datele locale. Nu este conectat un proiect Supabase și nu se trimit emailuri sau notificări reale.
 
-Aplicația este construită folosind **Next.js** (App Router) pentru un frontend ultra-rapid și un SEO excelent, bazându-se pe **Supabase** pentru backend (Autentificare sigură, Bază de Date PostgreSQL, Server Actions și Row Level Security). Interfața grafică este complet personalizată cu Tailwind CSS, urmărind un design de lux tip **"Liquid Glass Premium"** (sticlă mată, reflexii ambientale, animații fluide și modale customizate).
-
----
-
-## 🌟 Funcționalități de Bază pe Roluri
-
-Aplicația folosește un sistem de rutare și protecție bazat pe 3 roluri distincte:
-
-### 👑 1. Admin (Centrul de Comandă)
-
-Rolul de administrator gestionează platforma la nivel macro, având acces la statistici globale și managementul echipei.
-
-- **Dashboard Statistic:** Vizualizare încasări globale lunare, număr total de clienți noi și membri activi ai echipei.
-- **Managementul Echipei (Frizeri):** \* Înregistrarea de noi frizeri direct din platformă (creare automată de conturi cu email corporativ).
-  - Editarea numelui locațiilor (Barbershop).
-  - Suspendarea temporară sau activarea conturilor frizerilor.
-  - Ștergerea definitivă a conturilor.
-- **Baza de Clienți:** Vizualizare globală a tuturor clienților de pe platformă, cu opțiuni de moderare.
-
-### 💈 2. Barber (Panoul Profesionistului)
-
-Frizerii au la dispoziție un set complet de unelte pentru a-și gestiona agenda, serviciile și baza proprie de clienți.
-
-- **Agenda Zilei & Kanban Săptămânal:** Vizualizare detaliată a programărilor (În Așteptare, Confirmat, Anulat, Reprogramat).
-- **Control Programări:** Confirmarea cererilor, anularea sau trimiterea de propuneri de reprogramare către clienți direct din interfață.
-- **Setări Program de Lucru:** \* Definirea orelor de lucru pentru fiecare zi a săptămânii.
-  - Integrare automată cu Sărbătorile Legale (fixe) și Sărbătorile Religioase (mobile) pentru blocarea automată a calendarului.
-  - Blocare manuală pentru zile de concediu / zile libere.
-- **Catalog Servicii:** Adăugare, editare, ștergere servicii. Sistem integrat de discounturi procentuale (calculează automat prețul final pentru client).
-- **Registru Clienți:** Agendă permanentă cu toți clienții care i-au trecut pragul. Posibilitatea de a bloca (ban) clienții neserioși.
-- **Setări Cont:** Actualizare date personale, nume salon, diplomă/certificare, telefon, securitate (schimbare parolă) și ștergere definitivă a contului.
-
-### 📱 3. Client (Portalul de Rezervări)
-
-O experiență premium, rapidă și intuitivă pentru clienții finali.
-
-- **Flux de Rezervare Fluid:** 1. Alegerea locației/frizerului. 2. Selectarea serviciului dorit. 3. Alegerea datei și a orei (orele ocupate sau blocate de frizer dispar automat). 4. Confirmarea rezumatului de plată.
-- **Management Programare Activă:** Vizualizarea statusului programării curente. Posibilitatea de a o anula sau de a accepta/refuza o propunere de reprogramare venită de la frizer.
-- **Locații Favorite:** Salvarea frizerilor preferați pentru o rezervare ultra-rapidă (Quick Book) dintr-un meniu dedicat.
-- **Istoric Complet:** Tabel detaliat cu toate vizitele anterioare, statusul lor și sumele plătite.
-- **Setări Cont:** Modificare profil, securitate și opțiune de ștergere definitivă a contului (GDPR compliance).
-
----
-
-## 🛠 Tech Stack
-
-- **Framework:** [Next.js](https://nextjs.org/) (React) cu App Router.
-- **Backend as a Service:** [Supabase](https://supabase.com/) (PostgreSQL, Supabase Auth, Supabase Server Actions).
-- **Styling:** [Tailwind CSS](https://tailwindcss.com/) (Efecte avansate de backdrop-blur, gradienți și modale customizate).
-- **TypeScript:** Tipizare strictă pentru o arhitectură curată, scalabilă și lipsită de erori.
-
----
-
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
-
-## Getting Started
-
-First, run the development server:
+## Pornire
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-
 ```
+
+Deschide `http://localhost:5173/`. Configurarea locală folosește `VITE_DEMO_MODE=true`.
+
+## Client
+
+Clientul vede salonul și serviciile. La **Contul meu → Intră în cont → Creează un cont** completează prenumele, numele, telefonul, emailul și parola. Formularul creează exclusiv un cont de client. Sesiunea este păstrată în acest browser.
+
+Poate face o rezervare, să o reprogrameze sau să o anuleze. Orele încep la 09:30 și se calculează după durata serviciului: 30 min → 09:30, 10:00; 40 min → 09:30, 10:10. Pauzele și rezervările existente împart ziua în intervale libere. Nu există butoane de alegere a rolului sau acces la agenda frizerului în fluxul clientului.
+
+## Cristi
+
+Intră din pagina principală, folosind butonul **Intră în cont**. Contul lui Cristi deschide automat agenda frizerului; clienții rămân în zona lor de programări. Ruta `/frizer` rămâne disponibilă direct.
+
+Cont LOCAL de prezentare, creat automat în acest browser:
+
+- Email: `cristi@barber.com`
+- Parolă: `1`
+
+În Salon → Program de lucru nu există o pauză implicită. Frizerul o activează pentru fiecare zi și alege orele din selecturile în format 24h, în pași de 5 minute. Programul existent salvat în browser este păstrat până îl editează. Înainte de salvare vede rezervările incompatibile cu noul program sau pauza; după confirmare acestea se anulează, rămân în istoric și primesc notificări locale. O programare în curs nu se anulează prin acest flux.
+
+În Salon → Zile libere poate bloca o zi sau un concediu de până la 90 de zile. Înainte de confirmare vede programările care vor fi anulate și clienții fără cont pe care trebuie să îi sune. Clienții cu cont primesc notificări locale în secțiunea cu clopoțel. Rezervările anulate rămân în istoric; deblocarea unei zile nu le reactivează. **Modifică / deblochează** permite alegerea unui subinterval din concediu. Restul zilelor rămân blocate; programul săptămânal și sărbătorile au în continuare efect. Redeschiderea nu trimite notificări în masă și nu reactivează rezervări.
+
+În Salon → Sărbători poate selecta toate sărbătorile sau alege individual sărbătorile legale și sărbătorile ortodoxe suplimentare în care nu lucrează. Paștele, Vinerea Mare, Înălțarea și Rusaliile se calculează pentru fiecare an. Zilele săptămânale închise, concediile și sărbătorile selectate dispar din calendarul clientului.
+
+Parola simplă `1` este exclusiv pentru acest cont de test local; înregistrarea clienților cere în continuare minimum 8 caractere. Contul local vechi este actualizat automat, păstrând aceeași identitate și datele existente.
+
+Acestea sunt credențiale publice de test, fără valoare în afara prototipului. Cristi are agenda, clienții, serviciile, programul de lucru, pauzele și zilele libere. Un cont de client nu poate intra în această zonă prin formularul de autentificare.
+
+Conturile locale sunt o simulare pentru verificarea UI, nu autentificare sigură pentru producție. Parolele se păstrează ca digesturi PBKDF2 cu salt, nu în clar. Folosește date fictive. Ștergerea datelor browserului șterge și conturile/progrămările locale. Autentificarea pe telefoane folosește Web Crypto și necesită localhost sau HTTPS.
+
+## Design
+
+Direcția curentă este dark glass, cu lumină portocalie, text alb lizibil, servicii în rânduri și rezervare în sheet-uri ancorate jos. Mobile-first, text de bază de 16px, butoane mari și navigație de jos. Pe mobil nu există hamburger sau un al doilea meniu sus; pe desktop există navigație orizontală.
+
+Selecturile au liste proprii ancorate imediat sub câmp, suprafață glass, opțiune bifată, scroll și navigare prin tastatură. Săgeata este la 20px în interior. Zilele au minimum 70px lățime într-un rând glisabil, iar săgețile de săptămână au 44px. Preferința de reducere a mișcării este respectată.
+
+## Verificări
+
+```bash
+npm run build
+npm test
+```
+
+Testele locale verifică separarea contului lui Cristi de clienți, autentificarea persistentă, parolele stocate ca digesturi, orele României, schimbarea orei și suprapunerea intervalelor.
+
+## Etapa următoare
+
+După validarea UI, conectăm un proiect Supabase nou și configurăm autentificarea, emailurile și push. Codul de backend pregătit anterior și instrucțiunile tehnice sunt în [docs/backend-later.md](docs/backend-later.md). Nu trebuie executate pentru a testa interfața locală.
+
+Aplicația veche Next.js a fost eliminată cu acordul utilizatorului; poate fi recuperată din istoricul Git. `craft-anything` a fost evaluat din README, dar nu a fost instalat/executat. Experiența publică MERO a fost inspectată fără crearea vreunei rezervări acolo.
+
+Lista include și Floriile, Izvorul Tămăduirii, Sfinții Trei Ierarhi, Nașterea și Tăierea Capului Sfântului Ioan, Sfântul Ilie, Acoperământul Maicii Domnului, Sfânta Parascheva, Dimitrie cel Nou și Sfântul Ștefan. Un hram local sau o altă zi se poate adăuga din Zile libere. Selecția se repetă anual; schimbarea anului afișează datele, fără să schimbe politica.
+
+Calendarul folosește o politică editabilă a salonului, nu o presupunere că frizerul este obligat să închidă în toate zilele enumerate. Referințe pentru date: [calendarul Doxologia](https://doxologia.ro/calendar-ortodox), [lista sărbătorilor legale](https://legislatie.just.ro/Public/DetaliiDocument/290668).
+
+
+## Agenda și controalele de disponibilitate
+
+Agenda frizerului afișează zilele de lucru; săgețile sar peste zilele săptămânale închise, concedii și sărbătorile selectate. Calendarul propriu al aplicației este ancorat și centrat sub câmp, cu suprafață glass, cifre de 16px și panou compact de 264px. Nu mai folosește popup-ul nativ al browserului.
+
+Căutarea din agendă verifică toate datele după client, telefon, serviciu, dată sau oră, păstrând filtrul de status. Cardul afișează doar ora sosirii. Serviciile salonului, programul săptămânal, clienții și sărbătorile au căutare; aceasta ignoră diacriticele și majusculele. Căutările au un singur buton de ștergere.
+
+La **Zi liberă** există un singur selector de dată; **Concediu** păstrează începutul și sfârșitul. Selecturile cu multe opțiuni includ căutare. Logout este în header, separat de singurul acces **Contul meu** din navigație. Acțiunile programărilor și controalele nebifate folosesc aceeași paletă glass.

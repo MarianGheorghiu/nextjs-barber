@@ -1,0 +1,4 @@
+project_id = "atelier-barber"
+
+[functions.push-dispatch]
+verify_jwt = false
