@@ -55,10 +55,28 @@ check('client cannot invoke notification dispatcher',lambda: query('select publi
 check('client cannot read push endpoints belonging to others',lambda: eq(query('select count(*) from public.push_subscriptions;',CLIENT),'0'))
 
 SERVICE = query("select id from public.services where duration_minutes=60 limit 1;")
-DAY = query("select d::date from generate_series(current_date+1,current_date+7,interval '1 day')d where extract(dow from d) between 1 and 5 limit 1;")
+DAY = query("select d::date from generate_series(current_date+3,current_date+12,interval '1 day')d where extract(dow from d) between 1 and 5 and public.holiday_reason(d::date,(select closed_holiday_ids from public.barbers)) is null limit 1;")
 START = query("select starts_at from public.available_slots('%s','%s') limit 1;" % (SERVICE,DAY))
 assert START
+query("update public.barbers set auto_confirm=false;", OWNER)
 ID = query("select public.book_appointment('%s','%s');" % (SERVICE,START),CLIENT)
+check('manual confirmation starts pending on both accounts', lambda: (
+    eq(query(f"select status from public.appointments where id='{ID}';", CLIENT), 'pending'),
+    eq(query(f"select status from public.appointments where id='{ID}';", OWNER), 'pending')
+))
+check('booking alerts the barber and acknowledges the client', lambda: (
+    eq(query(f"select title from public.notification_outbox where appointment_id='{ID}';", OWNER), 'Programare nouă'),
+    eq(query(f"select title from public.notification_outbox where appointment_id='{ID}';", CLIENT), 'Cerere de programare trimisă')
+))
+old_review = query(f"select public.appointment_review_key(a) from public.appointments a where id='{ID}';")
+query(f"select public.change_appointment_status('{ID}','confirmed','{old_review}');", OWNER)
+check('confirmation updates status and notifies the client', lambda: (
+    eq(query(f"select status from public.appointments where id='{ID}';", CLIENT), 'confirmed'),
+    eq(query(f"select count(id) from public.notification_outbox where title='Programare confirmată' and appointment_id='{ID}';", CLIENT), '1')
+))
+check('stale cancellation is rejected after confirmation', lambda: query(
+    f"select public.change_appointment_status('{ID}','cancelled','{old_review}');", CLIENT, True))
+query("update public.barbers set auto_confirm=true;", OWNER)
 check('booking records server-side price',lambda: eq(query("select price_cents from public.appointments where id='%s';" % ID,CLIENT),'8000'))
 check('client cannot read another client booking',lambda: eq(query('select count(*) from public.appointments;',OTHER),'0'))
 check('direct booking writes are denied',lambda: query("update public.appointments set price_cents=0;",CLIENT,True))
@@ -106,9 +124,22 @@ check('client can dismiss their notifications', lambda: eq(query("select count(i
 check('client cannot dismiss barber notifications', lambda: eq(query("select count(id) from public.notification_outbox where title='Reprogramare acceptată' and dismissed_at is null;", OWNER), '1'))
 check('dismissal preserves the delivery record', lambda: eq(query("select count(id) from public.notification_outbox where title='Propunere de reprogramare' and dismissed_at is not null;", CLIENT), '2'))
 
+# Direct client changes notify the barber and cannot silently replace a newer visit.
+move_review = query(f"select public.appointment_review_key(a) from public.appointments a where id='{ID}';")
+query(f"select public.reschedule_appointment('{ID}','{START}','{move_review}');", CLIENT)
+check('client can reschedule directly and alerts the barber', lambda: (
+    eq(query(f"select starts_at from public.appointments where id='{ID}';", CLIENT), START),
+    eq(query(f"select count(id) from public.notification_outbox where appointment_id='{ID}' and title='Programare reprogramată';", OWNER), '1')
+))
+check('an old cancellation cannot cancel the newly moved visit', lambda: query(
+    f"select public.change_appointment_status('{ID}','cancelled','{move_review}');", CLIENT, True))
+
 # Cancel and reuse interval: both racing callers must not get it.
 query("select public.change_appointment_status('%s','cancelled');" % ID,CLIENT)
-check('cancellation retains history',lambda: eq(query("select status from public.appointments where id='%s';" % ID,CLIENT),'cancelled'))
+check('cancellation retains history and alerts the barber', lambda: (
+    eq(query(f"select status from public.appointments where id='{ID}';", CLIENT), 'cancelled'),
+    eq(query(f"select count(id) from public.notification_outbox where appointment_id='{ID}' and title='Programare anulată';", OWNER), '1')
+))
 def race(user):
     sql="set role authenticated; set request.jwt.claim.sub='%s'; select public.book_appointment('%s','%s');" % (user,SERVICE,START)
     return subprocess.run(BASE,input=sql,text=True,capture_output=True).returncode
@@ -117,4 +148,59 @@ with concurrent.futures.ThreadPoolExecutor(2) as pool:
 check('exactly one simultaneous booking succeeds',lambda: eq(sorted(outcomes),[0,3]))
 check('outbox receives booking events',lambda: eq(query('select count(*)>0 from public.notification_outbox;'),'t'))
 check('customer cannot modify outbox',lambda: query('delete from public.notification_outbox;',CLIENT,True))
+
+# Calendar parity, archived services and atomic closure of real appointments.
+FADE = query("select id from public.services where name='Skin fade';")
+query(f"update public.services set duration_minutes=40 where id='{FADE}';", OWNER)
+check('a 40-minute service uses its own duration as the step', lambda: eq(query(f"""
+    select string_agg(to_char(starts_at at time zone 'Europe/Bucharest','HH24:MI'),',' order by starts_at)
+    from (select starts_at from public.available_slots('{FADE}','{DAY}') limit 3) s;
+"""), '10:00,10:40,11:20'))
+FIRST = query(f"select starts_at from public.available_slots('{FADE}','{DAY}') limit 1;")
+check('outdated service price or duration is rejected', lambda: query(
+    f"""select public.book_appointment('{FADE}','{FIRST}',p_expected_service:='["{FADE}","Skin fade",45,6000,true]');""", CLIENT, True))
+FADE_ID = query(f"select public.book_appointment('{FADE}','{FIRST}');", CLIENT)
+query(f"update public.services set active=false, duration_minutes=45 where id='{FADE}';", OWNER)
+check('client can move their archived service with its original duration', lambda: eq(query(f"""
+    select extract(epoch from ends_at-starts_at)::integer/60
+    from public.available_slots('{FADE}','{DAY}','{FADE_ID}') limit 1;
+""", CLIENT), '40'))
+check('archived service cannot be booked again', lambda: eq(query(f"select count(*) from public.available_slots('{FADE}','{DAY}');"), '0'))
+
+cal_args = f"p_from:='{DAY}',p_to:='{DAY}'"
+check('client cannot preview another person’s affected appointments', lambda: query(
+    f"select id from public.preview_calendar_change({cal_args});", CLIENT, True))
+check('owner must review bookings before closing a day', lambda: query(
+    f"select public.apply_calendar_change('{{}}',{cal_args});", OWNER, True))
+eq(query(f"select count(*) from public.days_off where date='{DAY}';"), '0')
+review = query(f"""
+    select array_agg(public.appointment_review_key(a))
+    from public.appointments a where a.status in ('pending','confirmed')
+      and (a.starts_at at time zone 'Europe/Bucharest')::date = '{DAY}';
+""")
+check('reviewed day closure atomically cancels both visits', lambda: eq(query(f"""
+    select public.apply_calendar_change('{review}',{cal_args},p_reason:='Concediu')->>'cancelled';
+""", OWNER), '2'))
+check('client sees cancellation reason in history and inbox', lambda: (
+    eq(query(f"select cancellation_reason from public.appointments where id='{FADE_ID}';", CLIENT), 'Concediu'),
+    eq(query(f"select count(id) from public.notification_outbox where appointment_id='{FADE_ID}' and title='Programare anulată' and body like '%Concediu%';", CLIENT), '1')
+))
+check('closed day is publicly visible without the private reason', lambda: eq(query(f"""
+    set role anon;
+    select count(*) from public.calendar_days_off() where date='{DAY}' and reason='';
+"""), '1'))
+check('closed day blocks new bookings', lambda: eq(query(f"select count(*) from public.available_slots('{SERVICE}','{DAY}');"), '0'))
+query(f"select public.remove_time_off('{DAY}','{DAY}');", OWNER)
+check('reopening frees slots and preserves cancellation history', lambda: (
+    eq(query(f"select count(*) > 0 from public.available_slots('{SERVICE}','{DAY}');"), 't'),
+    eq(query(f"select status from public.appointments where id='{FADE_ID}';", CLIENT), 'cancelled')
+))
+check('movable holiday rule matches the frontend calendar', lambda: eq(
+    query("select public.holiday_reason('2027-04-30',array['good-friday']);"), 'Vinerea Mare'))
+check('owner can save a holiday selection and working hours', lambda: (
+    eq(query("select public.apply_calendar_change('{}',p_holidays:=array['easter'])->>'cancelled';", OWNER), '0'),
+    eq(query("""select public.apply_calendar_change('{}',p_hours:=(
+        select jsonb_agg(to_jsonb(h) || '{"break_start":null,"break_end":null}')
+        from public.working_hours h))->>'cancelled';""", OWNER), '0')
+))
 print('All database integration checks passed.')

@@ -39,11 +39,12 @@ export function bookLocal(source:DemoState,serviceId:string,start:string,userId:
 }
 export function changeLocalStatus(source:DemoState,id:string,next:Status,userId:string,now=Date.now(),expected?:string) {
   const state=structuredClone(source),a=getAppointment(state,id),owner=userId===state.barber.owner_id;
-  if(!owner&&(a.client_id!==userId||next!=='cancelled'||!canCancel(a.starts_at,state.barber.cancellation_hours,now)))throw new Error('Nu poți modifica această programare.');
+  if(!owner&&(a.client_id!==userId||next!=='cancelled'||Date.parse(a.starts_at)<=now||!canCancel(a.starts_at,state.barber.cancellation_hours,now)))throw new Error('Nu poți modifica această programare.');
   if(!['pending','confirmed','completed','cancelled','no_show'].includes(next)||next==='pending')throw new Error('Statusul programării nu este valid.');
   if(a.status===next)return state;
   checkReview(a,expected);
   if(!active(a))throw new Error('Programarea este încheiată sau anulată și nu mai poate fi modificată.');
+  if(next==='confirmed'&&Date.parse(a.starts_at)<=now)throw new Error('Programarea a început deja.');
   if(['completed','no_show'].includes(next)&&Date.parse(a.starts_at)>now)throw new Error('Programarea nu a început încă.');
   a.status=next;
   if(!active(a))a.reschedule_proposal=null;
@@ -78,6 +79,7 @@ export function rescheduleLocal(source:DemoState,id:string,start:string,userId:s
   const old=details(a);
   a.reschedule_proposal = null;
   a.starts_at=selected.starts_at;a.ends_at=selected.ends_at;
+  a.status=owner||state.barber.auto_confirm?'confirmed':'pending';
   notify(state,owner?a.client_id:state.barber.owner_id,a,'Programare reprogramată',`Programarea ${old} a fost mutată: ${details(a)}.`,now);
   return state;
 }

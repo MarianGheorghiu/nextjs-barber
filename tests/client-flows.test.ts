@@ -249,3 +249,15 @@ test('prețul/durata schimbate după alegerea orei cer o nouă verificare înain
   assert.throws(()=>bookLocal(source,'tuns',start,client,undefined,'',now,expected),/Serviciul s-a schimbat/);
   assert.equal(source.appointments.length,0);
 });
+
+test('versiunea programării păstrează microsecundele Supabase și normalizează fusul orar', () => {
+  const [appointment] = booked().state.appointments;
+  assert.equal(
+    appointmentReviewKey({ ...appointment, updated_at: '2026-11-04T10:00:00.123456+02:00' }),
+    appointment.id + '/2026-11-04T08:00:00.123456Z',
+  );
+  assert.equal(
+    appointmentReviewKey({ ...appointment, updated_at: '2026-11-04T08:00:00.12+00:00' }),
+    appointment.id + '/2026-11-04T08:00:00.120000Z',
+  );
+});

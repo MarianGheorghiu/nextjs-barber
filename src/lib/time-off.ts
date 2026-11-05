@@ -4,7 +4,14 @@ import { addDays, clock, dateKey, prettyDate } from './time.ts';
 import { HOLIDAY_RULES, holidayReason } from './calendar.ts';
 export type ClosurePreview = { appointments: Appointment[]; manual: Appointment[] };
 function validDay(day:string) { return /^\d{4}-\d{2}-\d{2}$/.test(day) && Number.isFinite(Date.parse(day+'T12:00:00Z')) && new Date(day+'T12:00:00Z').toISOString().slice(0,10)===day; }
-export function appointmentReviewKey(a:Appointment) { return JSON.stringify([a.id,a.starts_at,a.ends_at,a.status,a.client_id,a.client_name,a.client_phone,a.service_name,a.reschedule_proposal?.id]); }
+export function appointmentReviewKey(a: Appointment) {
+  if (a.updated_at) {
+    const timestamp = new Date(a.updated_at).toISOString();
+    const fraction = /\.(\d+)/.exec(a.updated_at)?.[1] ?? '';
+    return `${a.id}/${timestamp.slice(0, 19)}.${fraction.padEnd(6, '0')}Z`;
+  }
+  return JSON.stringify([a.id, a.starts_at, a.ends_at, a.status, a.client_id, a.client_name, a.client_phone, a.service_name, a.reschedule_proposal?.id]);
+}
 export function dateRange(from: string, to: string): string[] {
   if(!validDay(from)||!validDay(to)||from>to)throw new Error('Alege un interval de date corect.');
   const result:string[]=[];for(let day=from;day<=to;day=addDays(day,1)){result.push(day);if(result.length>90)throw new Error('Poți adăuga cel mult 90 de zile într-un singur interval.');}return result;

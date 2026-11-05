@@ -19,7 +19,14 @@ revoke all on function public.dispatch_pending_push() from public, anon, authent
 
 create or replace function public.on_notification_queued() returns trigger
 language plpgsql security definer set search_path = '' as $$
-begin perform public.dispatch_pending_push(); return new; end $$;
+begin
+  perform public.dispatch_pending_push();
+  return new;
+exception when others then
+  -- A failure to enqueue HTTP must not roll back the booking or its inbox entry.
+  raise warning 'Immediate push dispatch failed (%)', sqlstate;
+  return new;
+end $$;
 revoke all on function public.on_notification_queued() from public, anon, authenticated;
 drop trigger if exists notification_dispatch on public.notification_outbox;
 create trigger notification_dispatch after insert on public.notification_outbox for each statement execute function public.on_notification_queued();

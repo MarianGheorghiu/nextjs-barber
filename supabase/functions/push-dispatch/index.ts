@@ -22,7 +22,7 @@ Deno.serve(async (request: Request) => {
       // Prevent a malicious subscription from turning the service-role sender into an SSRF proxy.
       if (!allowedPushEndpoint(subscription.endpoint)) { await db.from('push_subscriptions').delete().eq('id', subscription.id); continue; }
       try {
-        await webpush.sendNotification({ endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } }, JSON.stringify({ title: notification.title, body: notification.body, tag: `appointment-${notification.appointment_id}` }), { TTL: 3600, urgency: 'high', timeout: 5000 });
+        await webpush.sendNotification({ endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } }, JSON.stringify({ title: notification.title, body: 'Deschide aplicația pentru detalii.', tag: `appointment-${notification.appointment_id}` }), { TTL: 3600, urgency: 'high', timeout: 5000 });
       } catch (error) {
         const status = (error as { statusCode?: number }).statusCode;
         if (status === 404 || status === 410) await db.from('push_subscriptions').delete().eq('id', subscription.id);

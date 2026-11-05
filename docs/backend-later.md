@@ -1,4 +1,4 @@
-> Backend de revizuit înainte de conectare: regulile noi de calcul al orelor, concedii, sărbători și notificări sunt implementate și verificate în prototipul local. Schema/RPC-urile de mai jos nu trebuie lansate înainte de portarea acestor reguli.
+> Regulile de disponibilitate și modificare a calendarului sunt portate în migrarea `202611050003_booking_consistency.sql`. Verifică integrarea pe un proiect Supabase nou înainte de lansare, inclusiv Auth, Realtime și push pe telefon.
 
 # Backend pregătit pentru o etapă ulterioară
 
@@ -11,7 +11,7 @@ npm install
 npm run dev
 ```
 
-Fără configurare Supabase, **doar în dezvoltare**, aplicația pornește în demo. Butoanele Client / Frizer aleg identități fictive. Datele demo sunt stocate în browser sub `atelier.demo.*`, fără conturi, emailuri sau push reale. Nu introduce date personale în demo.
+Fără configurare Supabase, **doar în dezvoltare**, aplicația pornește în demo. Conturile și programările demo sunt stocate local în browser. Confirmarea prin email și livrarea push necesită integrarea Supabase. Nu introduce date personale în demo.
 
 Pentru demo din build-ul static setează explicit `VITE_DEMO_MODE=true`. În producție, lipsa configurării afișează o stare neconectată; nu simulează rezervări reale automat.
 
@@ -83,9 +83,9 @@ auth.users 1 ── N push_subscriptions
 
 Prețurile se stochează în bani întregi (`price_cents`); în UI se afișează lei. Programarea păstrează un snapshot al numelui serviciului, prețului, duratei și datelor clientului. Arhivarea serviciului nu șterge istoricul.
 
-Orele se stochează ca `timestamptz`. Programul de lucru se interpretează în `Europe/Bucharest`, inclusiv la schimbarea orei. Disponibilitatea acoperă următoarele 60 de zile, cu pași de 15 minute și minimum 15 minute înainte de vizită. Durata completă, pauzele și concediile sunt verificate pe server. Maximum 5 rezervări viitoare active/client.
+Orele se stochează ca `timestamptz`. Programul de lucru se interpretează în `Europe/Bucharest`, inclusiv la schimbarea orei. Disponibilitatea acoperă următoarele 60 de zile, în pași egali cu durata serviciului din fiecare interval liber. Se pot alege ore cu minimum 15 minute înainte de vizită. Durata completă, pauzele, concediile și sărbătorile selectate sunt verificate pe server. Maximum 5 rezervări viitoare active/client.
 
-Exclusion constraint pe intervale `[start,end)` împiedică suprapunerile. RPC-urile de rezervare, reprogramare, anulare și modificare a programului folosesc același lock tranzacțional. Schimbările de program incompatibile sunt respinse, fără ștergerea rezervărilor existente. Reprogramarea păstrează prețul și durata inițiale.
+Exclusion constraint pe intervale `[start,end)` împiedică suprapunerile. RPC-urile de rezervare, reprogramare, anulare și modificare a programului folosesc același lock tranzacțional. Frizerul vede programările afectate înainte să confirme o schimbare de calendar. Serverul verifică din nou agenda, păstrează anulările în istoric și notifică utilizatorii afectați. Dacă o vizită este în curs, schimbarea este respinsă. O propunere a frizerului păstrează ora inițială până la acceptarea clientului. Reprogramarea păstrează prețul și durata inițiale.
 
 ## Push fără abonament plătit
 
@@ -130,7 +130,7 @@ python3 tests/database.test.py
 /usr/lib/postgresql/18/bin/pg_ctl -D /tmp/atelier-studio-pg stop
 ```
 
-Scriptul creează și elimină propria bază. Simulează doar structura Auth necesară testelor SQL, nu întregul serviciu Supabase Auth. Verifică izolarea clienților, autorizarea serverului, prețul calculat din catalog, pauzele, istoricul și două rezervări concurente. Nu rula bootstrap-ul de test în Supabase.
+Scriptul creează și elimină propria bază. Simulează doar structura Auth necesară testelor SQL, nu întregul serviciu Supabase Auth. Verifică și izolarea clienților, confirmarea, propunerile de reprogramare, istoricul, inboxul, modificarea calendarului și două rezervări concurente. Nu rula bootstrap-ul de test în Supabase.
 
 ## Înainte de primul client real
 
